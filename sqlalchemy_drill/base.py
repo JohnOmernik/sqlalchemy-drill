@@ -3,12 +3,12 @@
 """
 Support for the Apache Drill database.
 
-
 """
 from sqlalchemy import sql, schema, types, exc, pool
 from sqlalchemy.sql import compiler, expression
 from sqlalchemy.engine import default, base, reflection
 from sqlalchemy import processors
+
 
 class AcNumeric(types.Numeric):
     def get_col_spec(self):
@@ -20,6 +20,7 @@ class AcNumeric(types.Numeric):
     def result_processor(self, dialect, coltype):
         return None
 
+
 class AcFloat(types.Float):
     def get_col_spec(self):
         return "FLOAT"
@@ -28,34 +29,41 @@ class AcFloat(types.Float):
         """By converting to string, we can use Decimal types round-trip."""
         return processors.to_str
 
+
 class AcInteger(types.Integer):
     def get_col_spec(self):
         return "INTEGER"
+
 
 class AcTinyInteger(types.Integer):
     def get_col_spec(self):
         return "TINYINT"
 
+
 class AcSmallInteger(types.SmallInteger):
     def get_col_spec(self):
         return "SMALLINT"
+
 
 class AcDateTime(types.DateTime):
     def get_col_spec(self):
         return "DATETIME"
 
-class AcDate(types.Date):
 
+class AcDate(types.Date):
     def get_col_spec(self):
         return "DATETIME"
+
 
 class AcText(types.Text):
     def get_col_spec(self):
         return "MEMO"
 
+
 class AcString(types.String):
     def get_col_spec(self):
         return "TEXT" + (self.length and ("(%d)" % self.length) or "")
+
 
 class AcUnicode(types.Unicode):
     def get_col_spec(self):
@@ -67,31 +75,35 @@ class AcUnicode(types.Unicode):
     def result_processor(self, dialect, coltype):
         return None
 
+
 class AcChar(types.CHAR):
     def get_col_spec(self):
         return "TEXT" + (self.length and ("(%d)" % self.length) or "")
+
 
 class AcBinary(types.LargeBinary):
     def get_col_spec(self):
         return "BINARY"
 
+
 class AcBoolean(types.Boolean):
     def get_col_spec(self):
         return "YESNO"
+
 
 class AcTimeStamp(types.TIMESTAMP):
     def get_col_spec(self):
         return "TIMESTAMP"
 
-class DrillExecutionContext(default.DefaultExecutionContext):
 
+class DrillExecutionContext(default.DefaultExecutionContext):
     def get_lastrowid(self):
         self.cursor.execute("SELECT @@identity AS lastrowid")
         return self.cursor.fetchone()[0]
 
 
 class DrillCompiler(compiler.SQLCompiler):
-## Added On Purpose
+    ## Added On Purpose
     def default_from(self):
         """Called when a ``SELECT`` statement has no froms,
         and no ``FROM`` clause is to be appended.
@@ -100,21 +112,21 @@ class DrillCompiler(compiler.SQLCompiler):
 
         return " FROM (values(1))"
 
-## Added as part of the original package (we may eventually remove)
+    ## Added as part of the original package (we may eventually remove)
 
 
     extract_map = compiler.SQLCompiler.extract_map.copy()
     extract_map.update({
-            'month': 'm',
-            'day': 'd',
-            'year': 'yyyy',
-            'second': 's',
-            'hour': 'h',
-            'doy': 'y',
-            'minute': 'n',
-            'quarter': 'q',
-            'dow': 'w',
-            'week': 'ww'
+        'month': 'm',
+        'day': 'd',
+        'year': 'yyyy',
+        'second': 's',
+        'hour': 'h',
+        'doy': 'y',
+        'minute': 'n',
+        'quarter': 'q',
+        'dow': 'w',
+        'week': 'ww'
     })
 
     def visit_cast(self, cast, **kwargs):
@@ -127,7 +139,7 @@ class DrillCompiler(compiler.SQLCompiler):
             s += "TOP %s " % (select.limit)
         if select.offset:
             raise exc.InvalidRequestError(
-                    'Drill does not support LIMIT with an offset')
+                'Drill does not support LIMIT with an offset')
         return s
 
     def limit_clause(self, select):
@@ -139,9 +151,10 @@ class DrillCompiler(compiler.SQLCompiler):
         return binary.operator == '%' and 'mod' or binary.operator
 
     function_rewrites = {'current_date': 'now',
-                          'current_timestamp': 'now',
-                          'length': 'len',
-                          }
+                         'current_timestamp': 'now',
+                         'length': 'len',
+                         }
+
     def visit_function(self, func, **kwargs):
         """Drill function names differ from the ANSI SQL names;
         rewrite common ones"""
@@ -168,14 +181,15 @@ class DrillCompiler(compiler.SQLCompiler):
     def visit_extract(self, extract, **kw):
         field = self.extract_map.get(extract.field, extract.field)
         return 'DATEPART("%s", %s)' % \
-                    (field, self.process(extract.expr, **kw))
+               (field, self.process(extract.expr, **kw))
+
 
 class DrillDDLCompiler(compiler.DDLCompiler):
     def get_column_specification(self, column, **kwargs):
         if column.table is None:
             raise exc.CompileError(
-                            "drill requires Table-bound columns "
-                            "in order to generate DDL")
+                "drill requires Table-bound columns "
+                "in order to generate DDL")
 
         colspec = self.preparer.format_column(column)
         seq_col = column.table._autoincrement_column
@@ -199,16 +213,17 @@ class DrillDDLCompiler(compiler.DDLCompiler):
     def visit_drop_index(self, drop):
         index = drop.element
         self.append("\nDROP INDEX [%s].[%s]" % \
-                        (index.table.name,
-                        self._index_identifier(index.name)))
+                    (index.table.name,
+                     self._index_identifier(index.name)))
+
 
 class DrillIdentifierPreparer(compiler.IdentifierPreparer):
     reserved_words = compiler.RESERVED_WORDS.copy()
     reserved_words.update(['value', 'text'])
-    def __init__(self, dialect):
-        super(DrillIdentifierPreparer, self).\
-                __init__(dialect, initial_quote='[', final_quote=']')
 
+    def __init__(self, dialect):
+        super(DrillIdentifierPreparer, self). \
+            __init__(dialect, initial_quote='[', final_quote=']')
 
 
 class DrillDialect(default.DefaultDialect):
@@ -242,6 +257,9 @@ class DrillDialect(default.DefaultDialect):
         import pyodbc as module
         return module
 
+    def connect(self, *cargs, **cparams):
+        return self.dbapi.connect(autocommit=True, *cargs, **cparams)
+
     def create_connect_args(self, url):
         opts = url.translate_connect_args()
         connectors = ["Driver={Microsoft Drill Driver (*.mdb)}"]
@@ -255,13 +273,12 @@ class DrillDialect(default.DefaultDialect):
     def last_inserted_ids(self):
         return self.context.last_inserted_ids
 
-
     def has_table(self, connection, tablename, schema=None):
         result = connection.scalar(
-                        sql.text(
-                            "select count(*) from msysobjects where "
-                            "type=1 and name=:name"), name=tablename
-                        )
+            sql.text(
+                "select count(*) from msysobjects where "
+                "type=1 and name=:name"), name=tablename
+        )
         return bool(result)
 
     @reflection.cache
@@ -269,5 +286,3 @@ class DrillDialect(default.DefaultDialect):
         result = connection.execute("show tables")
         table_names = [r[0] for r in result]
         return table_names
-
-
