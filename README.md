@@ -1,2 +1,1 @@
-# sqlalchemy-drill
-Apache Drill Dialect for SQL Alchemy
+# A Microsoft Access dialect for SQLAlchemy.
