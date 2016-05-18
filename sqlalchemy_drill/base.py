@@ -10,6 +10,11 @@ from sqlalchemy.engine import default
 from sqlalchemy.sql import compiler
 
 
+
+
+
+
+
 class AcNumeric(types.Numeric):
     def get_col_spec(self):
         return "NUMERIC"
@@ -97,9 +102,7 @@ class AcTimeStamp(types.TIMESTAMP):
 
 
 class DrillExecutionContext(default.DefaultExecutionContext):
-    def get_lastrowid(self):
-        self.cursor.execute("SELECT @@identity AS lastrowid")
-        return self.cursor.fetchone()[0]
+    pass
 
 
 class DrillCompiler(compiler.SQLCompiler):
@@ -262,7 +265,7 @@ class DrillDialect(default.DefaultDialect):
 
     def create_connect_args(self, url):
         opts = url.translate_connect_args()
-        connectors = ["Driver={Microsoft Drill Driver (*.mdb)}"]
+        connectors = [""]
         connectors.append("Dbq=%s" % opts["database"])
         user = opts.get("username", None)
         if user:
@@ -271,7 +274,10 @@ class DrillDialect(default.DefaultDialect):
         return [[";".join(connectors)], {}]
 
     def last_inserted_ids(self):
-        return self.context.last_inserted_ids
+        """
+        Drill doesn't insert.
+        """
+        return []
 
     def has_table(self, connection, tablename, schema=None):
         result = connection.scalar(
@@ -283,9 +289,9 @@ class DrillDialect(default.DefaultDialect):
     def get_columns(self, connection, table_name, schema=None, **kw):
         q = "SELECT * FROM `%(table_id)s` LIMIT 0" % ({"table_id": table_name})
         columns = connection.execute(q)
-
         result = []
         for column_name in columns.keys():
+            
             column = {
                 "name": column_name,
                 "type": VARCHAR,
@@ -304,58 +310,21 @@ class DrillDialect(default.DefaultDialect):
         return table_names
 
     def get_primary_keys(self, connection, table_name, schema=None, **kw):
-        """Return information about primary keys in `table_name`.
-
-
-        Deprecated.  This method is only called by the default
-        implementation of :meth:`.Dialect.get_pk_constraint`.  Dialects should
-        instead implement the :meth:`.Dialect.get_pk_constraint` method
-        directly.
-
+        """
+        Drill doesn't have primary keys, return []
         """
         return []
 
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
-        """Return information about foreign_keys in `table_name`.
-
-        Given a :class:`.Connection`, a string
-        `table_name`, and an optional string `schema`, return foreign
-        key information as a list of dicts with these keys:
-
-        name
-          the constraint's name
-
-        constrained_columns
-          a list of column names that make up the foreign key
-
-        referred_schema
-          the name of the referred schema
-
-        referred_table
-          the name of the referred table
-
-        referred_columns
-          a list of column names in the referred table that correspond to
-          constrained_columns
+        """
+        Drill does not have foreign keys, return []
         """
 
         return []
 
     def get_indexes(self, connection, table_name, schema=None, **kw):
-        """Return information about indexes in `table_name`.
-
-        Given a :class:`.Connection`, a string
-        `table_name` and an optional string `schema`, return index
-        information as a list of dictionaries with these keys:
-
-        name
-          the index's name
-
-        column_names
-          list of column names in order
-
-        unique
-          boolean
+        """
+        Drill doesn't have indexes, return []
         """
 
         return []
