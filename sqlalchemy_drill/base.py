@@ -136,18 +136,12 @@ class DrillCompiler(compiler.SQLCompiler):
         return cast.clause._compiler_dispatch(self, **kwargs)
 
     def visit_select_precolumns(self, select):
-        """Drill puts TOP, it's version of LIMIT here """
-        s = select.distinct and "DISTINCT " or ""
-        if select.limit:
-            s += "TOP %s " % (select.limit)
-        if select.offset:
-            raise exc.InvalidRequestError(
-                'Drill does not support LIMIT with an offset')
-        return s
+        """No pre column stuff with Drill"""
+        return ""
 
-    # def limit_clause(self, select):
-    #     """Limit in drill is after the select keyword"""
-    #     return ""
+   # def limit_clause(self, select):
+   #      """Limit in drill is after the select keyword"""
+   #      return ""
 
     def binary_operator_string(self, binary):
         """Drill uses "mod" instead of "%" """
@@ -159,8 +153,8 @@ class DrillCompiler(compiler.SQLCompiler):
                          }
 
     def visit_function(self, func, **kwargs):
-        """Drill function names differ from the ANSI SQL names;
-        rewrite common ones"""
+        """Drill actually doesn't need this"""
+
         func.name = self.function_rewrites.get(func.name, func.name)
         return super(DrillCompiler, self).visit_function(func)
 
@@ -176,10 +170,11 @@ class DrillCompiler(compiler.SQLCompiler):
             return ""
 
     def visit_join(self, join, asfrom=False, **kwargs):
-        return ('(' + self.process(join.left, asfrom=True) + \
+        
+        return ( self.process(join.left, asfrom=True) + \
                 (join.isouter and " LEFT OUTER JOIN " or " INNER JOIN ") + \
                 self.process(join.right, asfrom=True) + " ON " + \
-                self.process(join.onclause) + ')')
+                self.process(join.onclause) )
 
     def visit_extract(self, extract, **kw):
         field = self.extract_map.get(extract.field, extract.field)
@@ -212,12 +207,6 @@ class DrillDDLCompiler(compiler.DDLCompiler):
                 colspec += " DEFAULT " + default
 
         return colspec
-
-    def visit_drop_index(self, drop):
-        index = drop.element
-        self.append("\nDROP INDEX [%s].[%s]" % \
-                    (index.table.name,
-                     self._index_identifier(index.name)))
 
 
 class DrillIdentifierPreparer(compiler.IdentifierPreparer):
