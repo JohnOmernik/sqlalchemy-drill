@@ -4,10 +4,10 @@
 Support for the Apache Drill database.
 
 """
-from sqlalchemy import sql, schema, types, exc, pool
-from sqlalchemy.sql import compiler, expression
-from sqlalchemy.engine import default, base, reflection
 from sqlalchemy import processors
+from sqlalchemy import sql, types, exc, pool, VARCHAR
+from sqlalchemy.engine import default
+from sqlalchemy.sql import compiler
 
 
 class AcNumeric(types.Numeric):
@@ -142,9 +142,9 @@ class DrillCompiler(compiler.SQLCompiler):
                 'Drill does not support LIMIT with an offset')
         return s
 
-    def limit_clause(self, select):
-        """Limit in drill is after the select keyword"""
-        return ""
+    # def limit_clause(self, select):
+    #     """Limit in drill is after the select keyword"""
+    #     return ""
 
     def binary_operator_string(self, binary):
         """Drill uses "mod" instead of "%" """
@@ -168,7 +168,7 @@ class DrillCompiler(compiler.SQLCompiler):
     # Strip schema
     def visit_table(self, table, asfrom=False, **kwargs):
         if asfrom:
-            return self.preparer.quote(table.name, table.quote)
+            return self.preparer.quote(table.name, '`')
         else:
             return ""
 
@@ -223,7 +223,7 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
 
     def __init__(self, dialect):
         super(DrillIdentifierPreparer, self). \
-            __init__(dialect, initial_quote='[', final_quote=']')
+            __init__(dialect, initial_quote='`', final_quote='`')
 
 
 class DrillDialect(default.DefaultDialect):
@@ -276,13 +276,86 @@ class DrillDialect(default.DefaultDialect):
     def has_table(self, connection, tablename, schema=None):
         result = connection.scalar(
             sql.text(
-                "select count(*) from msysobjects where "
-                "type=1 and name=:name"), name=tablename
+                "select * from name=:name limit 0"), name=tablename
         )
         return bool(result)
 
-    @reflection.cache
+    def get_columns(self, connection, table_name, schema=None, **kw):
+        q = "SELECT * FROM `%(table_id)s` LIMIT 0" % ({"table_id": table_name})
+        columns = connection.execute(q)
+
+        result = []
+        for column_name in columns.keys():
+            column = {
+                "name": column_name,
+                "type": VARCHAR,
+                "default": None,
+                "autoincrement": None,
+                "nullable": False,
+            }
+
+            result.append(column)
+
+        return result
+
     def get_table_names(self, connection, schema=None, **kw):
         result = connection.execute("show tables")
         table_names = [r[0] for r in result]
         return table_names
+
+    def get_primary_keys(self, connection, table_name, schema=None, **kw):
+        """Return information about primary keys in `table_name`.
+
+
+        Deprecated.  This method is only called by the default
+        implementation of :meth:`.Dialect.get_pk_constraint`.  Dialects should
+        instead implement the :meth:`.Dialect.get_pk_constraint` method
+        directly.
+
+        """
+        return []
+
+    def get_foreign_keys(self, connection, table_name, schema=None, **kw):
+        """Return information about foreign_keys in `table_name`.
+
+        Given a :class:`.Connection`, a string
+        `table_name`, and an optional string `schema`, return foreign
+        key information as a list of dicts with these keys:
+
+        name
+          the constraint's name
+
+        constrained_columns
+          a list of column names that make up the foreign key
+
+        referred_schema
+          the name of the referred schema
+
+        referred_table
+          the name of the referred table
+
+        referred_columns
+          a list of column names in the referred table that correspond to
+          constrained_columns
+        """
+
+        return []
+
+    def get_indexes(self, connection, table_name, schema=None, **kw):
+        """Return information about indexes in `table_name`.
+
+        Given a :class:`.Connection`, a string
+        `table_name` and an optional string `schema`, return index
+        information as a list of dictionaries with these keys:
+
+        name
+          the index's name
+
+        column_names
+          list of column names in order
+
+        unique
+          boolean
+        """
+
+        return []
