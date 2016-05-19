@@ -31,11 +31,15 @@ While using virtualenv is typically prefered, there is a docker container that w
 
 https://github.com/JohnOmernik/caraveldrill
 
-This Dockerfile will build a container has caravel, pyodbc, unixodbc, the MapR Drill ODBC connector all installed ready to go.  In fact all one has to do is set a directory to this repo, and then from within the container, execute:
+This Dockerfile will build a container has caravel, pyodbc, unixodbc, the MapR Drill ODBC connector all installed ready to go.  In fact all one has to do is set a directory to this repo, in the run.sh script in JohnOmernik/caraveldrill repo and do this:
+* Run the container
+* Determine the running container ID use docker ps
+* Use docker exec -it %CONTAINERID% /bin/bash to start another shell in the running container
+* cd to the directory that was mounted that has this repo
+* run python /path/to/thisrepo/setup.py install
+* This will install the dialect and make it useable for Caravel
 
-python /path/to/thisrepo/setup.py install
-
-And this dialect will be installed and ready to go.  
+Note: A neat side effect of using Flask is that if you make a change to the dialect files, and then rerun the python setup.py install while Caravel is running, Caravel picks up on the new dialect and reloads itself automagically. This is great for iterative development and testing. I typically have one shell to my caravel runserver -d prompt inside the container, another to the directory with the dialect inside the container, and then a couple of others to the actual code outside the container... it works great. Update the code, switch, install it, and then test in the browser!
 
 ### virualenv 
 
