@@ -1,5 +1,5 @@
 # Apache Drill dialect for SQLAlchemy.
-```
+---
 The primary purpose of this is to have a working dialect for Apache Drill that can be used with Caravel 
 
 https://github.com/airbnb/caravel
@@ -25,8 +25,9 @@ So, we are "limping along" and working as is, but contribution and just testing/
 ## Dependencies
 There are a couple of ways to approach using/developing on this: 
 
-```
+
 ### Docker Approach
+---
 While using virtualenv is typically prefered, there is a docker container that works at 
 
 https://github.com/JohnOmernik/caraveldrill
@@ -42,7 +43,7 @@ This Dockerfile will build a container has caravel, pyodbc, unixodbc, the MapR D
 Note: A neat side effect of using Flask is that if you make a change to the dialect files, and then rerun the python setup.py install while Caravel is running, Caravel picks up on the new dialect and reloads itself automagically. This is great for iterative development and testing. I typically have one shell to my caravel runserver -d prompt inside the container, another to the directory with the dialect inside the container, and then a couple of others to the actual code outside the container... it works great. Update the code, switch, install it, and then test in the browser!
 
 ### virualenv 
-
+```
 virtualenv env
 . env/bin/activate
 pip install -r requirements/test.txt
