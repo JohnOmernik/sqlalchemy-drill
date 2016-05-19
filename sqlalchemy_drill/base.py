@@ -139,9 +139,12 @@ class DrillCompiler(compiler.SQLCompiler):
         """No pre column stuff with Drill"""
         return ""
 
-   # def limit_clause(self, select):
-   #      """Limit in drill is after the select keyword"""
-   #      return ""
+    def limit_clause(self, select, **kwargs):
+        """Limit in drill is after the select keyword"""
+        text = ""
+        if select._limit_clause is not None:
+            text += "\n LIMIT " + self.process(select._limit_clause, **kwargs)
+        return text
 
     def binary_operator_string(self, binary):
         """Drill uses "mod" instead of "%" """
