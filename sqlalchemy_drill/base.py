@@ -214,7 +214,7 @@ class DrillDDLCompiler(compiler.DDLCompiler):
 
 class DrillIdentifierPreparer(compiler.IdentifierPreparer):
     reserved_words = compiler.RESERVED_WORDS.copy()
-    reserved_words.update(['value', 'text'])
+    reserved_words.update(['value', 'text', 'count'])
 
     def __init__(self, dialect):
         super(DrillIdentifierPreparer, self). \
@@ -258,8 +258,8 @@ class DrillDialect(default.DefaultDialect):
     def create_connect_args(self, url):
         opts = url.translate_connect_args()
         connectors = [""]
-        connectors.append("Dbq=%s" % opts["database"])
-        user = opts.get("username", None)
+#        connectors.append("Dbq=%s" % opts["database"])
+#        user = opts.get("username", None)
         if user:
             connectors.append("UID=%s" % user)
             connectors.append("PWD=%s" % opts.get("password", ""))
