@@ -10,97 +10,6 @@ from sqlalchemy.engine import default
 from sqlalchemy.sql import compiler
 
 
-
-
-
-
-
-class AcNumeric(types.Numeric):
-    def get_col_spec(self):
-        return "NUMERIC"
-
-    def bind_processor(self, dialect):
-        return processors.to_str
-
-    def result_processor(self, dialect, coltype):
-        return None
-
-
-class AcFloat(types.Float):
-    def get_col_spec(self):
-        return "FLOAT"
-
-    def bind_processor(self, dialect):
-        """By converting to string, we can use Decimal types round-trip."""
-        return processors.to_str
-
-
-class AcInteger(types.Integer):
-    def get_col_spec(self):
-        return "INTEGER"
-
-
-class AcTinyInteger(types.Integer):
-    def get_col_spec(self):
-        return "TINYINT"
-
-
-class AcSmallInteger(types.SmallInteger):
-    def get_col_spec(self):
-        return "SMALLINT"
-
-
-class AcDateTime(types.DateTime):
-    def get_col_spec(self):
-        return "DATETIME"
-
-
-class AcDate(types.Date):
-    def get_col_spec(self):
-        return "DATETIME"
-
-
-class AcText(types.Text):
-    def get_col_spec(self):
-        return "MEMO"
-
-
-class AcString(types.String):
-    def get_col_spec(self):
-        return "TEXT" + (self.length and ("(%d)" % self.length) or "")
-
-
-class AcUnicode(types.Unicode):
-    def get_col_spec(self):
-        return "TEXT" + (self.length and ("(%d)" % self.length) or "")
-
-    def bind_processor(self, dialect):
-        return None
-
-    def result_processor(self, dialect, coltype):
-        return None
-
-
-class AcChar(types.CHAR):
-    def get_col_spec(self):
-        return "TEXT" + (self.length and ("(%d)" % self.length) or "")
-
-
-class AcBinary(types.LargeBinary):
-    def get_col_spec(self):
-        return "BINARY"
-
-
-class AcBoolean(types.Boolean):
-    def get_col_spec(self):
-        return "YESNO"
-
-
-class AcTimeStamp(types.TIMESTAMP):
-    def get_col_spec(self):
-        return "TIMESTAMP"
-
-
 class DrillExecutionContext(default.DefaultExecutionContext):
     pass
 
@@ -112,58 +21,7 @@ class DrillCompiler(compiler.SQLCompiler):
         and no ``FROM`` clause is to be appended.
        Drill uses FROM values(1)
         """
-
         return " FROM (values(1))"
-
-    ## Added as part of the original package (we may eventually remove)
-
-
-    extract_map = compiler.SQLCompiler.extract_map.copy()
-    extract_map.update({
-        'month': 'm',
-        'day': 'd',
-        'year': 'yyyy',
-        'second': 's',
-        'hour': 'h',
-        'doy': 'y',
-        'minute': 'n',
-        'quarter': 'q',
-        'dow': 'w',
-        'week': 'ww'
-    })
-
-    def visit_cast(self, cast, **kwargs):
-        return cast.clause._compiler_dispatch(self, **kwargs)
-
-    def visit_select_precolumns(self, select):
-        """No pre column stuff with Drill"""
-        return ""
-
-    def limit_clause(self, select, **kwargs):
-        """Limit in drill is after the select keyword"""
-        text = ""
-        if select._limit_clause is not None:
-            text += "\n LIMIT " + self.process(select._limit_clause, **kwargs)
-        return text
-
-    def binary_operator_string(self, binary):
-        """Drill uses "mod" instead of "%" """
-        return binary.operator == '%' and 'mod' or binary.operator
-
-    function_rewrites = {'current_date': 'now',
-                         'current_timestamp': 'now',
-                         'length': 'len',
-                         }
-
-    def visit_function(self, func, **kwargs):
-        """Drill actually doesn't need this"""
-
-        func.name = self.function_rewrites.get(func.name, func.name)
-        return super(DrillCompiler, self).visit_function(func)
-
-    def for_update_clause(self, select):
-        """FOR UPDATE is not supported by Drill; silently ignore"""
-        return ''
 
     # Strip schema
     def visit_table(self, table, asfrom=False, **kwargs):
@@ -171,19 +29,78 @@ class DrillCompiler(compiler.SQLCompiler):
             return self.preparer.quote(table.name, '`')
         else:
             return ""
-
+    
     def visit_join(self, join, asfrom=False, **kwargs):
-        
-        return ( self.process(join.left, asfrom=True) + \
-                (join.isouter and " LEFT OUTER JOIN " or " INNER JOIN ") + \
-                self.process(join.right, asfrom=True) + " ON " + \
-                self.process(join.onclause) )
+        mydebug = 0
+        # The main goal of this visit_join is to pull apart the JOIN and add the table aliases to the ON Clause as Drill is finding ambiguous columns. 
+        # Pulls apart the JOIN. Todo: More work to understand what we know about a JOIN and ensure we catching all cases        
+        left_raw = join.left._compiler_dispatch(self, asfrom=True, **kwargs)
+        right_raw = join.right._compiler_dispatch(self, asfrom=True, **kwargs)
+        onclause_raw = join.onclause._compiler_dispatch(self, **kwargs)
 
-    def visit_extract(self, extract, **kw):
-        field = self.extract_map.get(extract.field, extract.field)
-        return 'DATEPART("%s", %s)' % \
-               (field, self.process(extract.expr, **kw))
+        if onclause_raw.lower().find(' and ') >= 0:
+            print "----#####  onclause has an AND"
+            print "----#####  onclause: %s" % onclause_raw
 
+        if mydebug == 1:
+            print "==========================================="
+            print "Left Raw: %s" % left_raw
+            print "Right Raw: %s" % right_raw
+            print "Onclause  Raw: %s" % onclause_raw
+            print "==========================================="
+            print "alias: %s" % join.alias
+            print "bind: %s" % join.bind
+            print "c: %s" % join.c
+            print "columns: %s" % join.columns
+            print "compare: %s" % join.compare
+            print "compile: %s" % join.compile
+            print "correspond_on_equivalents: %s" % join.correspond_on_equivalents
+            print "corresponding_column: %s" % join.corresponding_column
+            print "count: %s" % join.count
+            print "description: %s" % join.description
+            print "foreign_keys: %s" % join.foreign_keys
+            print "get_childreb: %s" % join.get_children
+            print "is_selectable: %s" % join.is_selectable
+            print "isouter: %s" % join.isouter
+            print "join: %s" % join.join
+            print "outerjoin: %s" % join.outerjoin
+            print "params: %s" % join.params
+            print "replace_selectable: %s" % join.replace_selectable
+            print "select: %s" % join.select
+            print "selectable: %s" % join.selectable
+            print whoyadaddy
+            print "==========================================="
+            print "==========================================="
+            print dir(join)
+    
+        # To Do: We need to handle RIGHT OUTER JOINS
+        if join.isouter:
+            join_type = " LEFT OUTER JOIN "
+        else:
+            join_type = " JOIN "
+    
+        # THis is looking for the as alias so we can interject them into the ON clause First on the LEFT and then on the RIGHT
+        if left_raw.lower().find(" as ") > 0:
+            t = left_raw.lower().split(" as ")
+            left_table = t[-1]
+        else:
+            left_table = left_raw
+        if right_raw.lower().find(" as ") > 0:
+            t = right_raw.lower().split(" as ")
+            right_table = t[-1]
+        else:
+            right_table = left_raw
+
+        # This fixes the ON Clause and adds aliases
+        o = onclause_raw.split(" = ")
+        otmp = "%s.%s = %s.%s" % (left_table, o[0], right_table, o[1])
+               
+        return (
+            join.left._compiler_dispatch(self, asfrom=True, **kwargs) +
+            join_type +
+            join.right._compiler_dispatch(self, asfrom=True, **kwargs) +
+            " ON " + otmp   
+        )
 
 class DrillDDLCompiler(compiler.DDLCompiler):
     def get_column_specification(self, column, **kwargs):
@@ -214,7 +131,7 @@ class DrillDDLCompiler(compiler.DDLCompiler):
 
 class DrillIdentifierPreparer(compiler.IdentifierPreparer):
     reserved_words = compiler.RESERVED_WORDS.copy()
-    reserved_words.update(['value', 'text', 'count'])
+    reserved_words.update(['value', 'text', 'count', 'timestamp'])
 
     def __init__(self, dialect):
         super(DrillIdentifierPreparer, self). \
@@ -222,24 +139,13 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
 
 
 class DrillDialect(default.DefaultDialect):
-    colspecs = {
-        types.Unicode: AcUnicode,
-        types.Integer: AcInteger,
-        types.SmallInteger: AcSmallInteger,
-        types.Numeric: AcNumeric,
-        types.Float: AcFloat,
-        types.DateTime: AcDateTime,
-        types.Date: AcDate,
-        types.String: AcString,
-        types.LargeBinary: AcBinary,
-        types.Boolean: AcBoolean,
-        types.Text: AcText,
-        types.CHAR: AcChar,
-        types.TIMESTAMP: AcTimeStamp,
-    }
+
+    colspecs = {}
     name = 'drill'
     supports_sane_rowcount = False
     supports_sane_multi_rowcount = False
+
+    supports_simple_order_by_label = True
 
     poolclass = pool.SingletonThreadPool
     statement_compiler = DrillCompiler
@@ -258,18 +164,10 @@ class DrillDialect(default.DefaultDialect):
     def create_connect_args(self, url):
         opts = url.translate_connect_args()
         connectors = [""]
-#        connectors.append("Dbq=%s" % opts["database"])
-#        user = opts.get("username", None)
         if user:
             connectors.append("UID=%s" % user)
             connectors.append("PWD=%s" % opts.get("password", ""))
         return [[";".join(connectors)], {}]
-
-    def last_inserted_ids(self):
-        """
-        Drill doesn't insert.
-        """
-        return []
 
     def has_table(self, connection, tablename, schema=None):
         result = connection.scalar(
@@ -283,7 +181,7 @@ class DrillDialect(default.DefaultDialect):
         columns = connection.execute(q)
         result = []
         for column_name in columns.keys():
-            
+            # TODO Handle types better            
             column = {
                 "name": column_name,
                 "type": VARCHAR,
@@ -301,22 +199,3 @@ class DrillDialect(default.DefaultDialect):
         table_names = [r[0] for r in result]
         return table_names
 
-    def get_primary_keys(self, connection, table_name, schema=None, **kw):
-        """
-        Drill doesn't have primary keys, return []
-        """
-        return []
-
-    def get_foreign_keys(self, connection, table_name, schema=None, **kw):
-        """
-        Drill does not have foreign keys, return []
-        """
-
-        return []
-
-    def get_indexes(self, connection, table_name, schema=None, **kw):
-        """
-        Drill doesn't have indexes, return []
-        """
-
-        return []
