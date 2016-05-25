@@ -199,3 +199,10 @@ class DrillDialect(default.DefaultDialect):
         table_names = [r[0] for r in result]
         return table_names
 
+    # The following three functions are needed to ensure drill returns columns to caravel
+    def get_primary_keys(self, connection, table_name, schema=None, **kw):
+        return []
+    def get_foreign_keys(self, connection, table_name, schema=None, **kw):
+        return []
+    def get_indexes(self, connection, table_name, schema=None, **kw):
+        return []
