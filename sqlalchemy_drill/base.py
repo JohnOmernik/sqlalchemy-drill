@@ -4,6 +4,7 @@
 Support for the Apache Drill database.
 
 """
+from __future__ import print_function 
 from sqlalchemy import processors
 from sqlalchemy import sql, types, exc, pool, VARCHAR
 from sqlalchemy.engine import default
@@ -39,39 +40,39 @@ class DrillCompiler(compiler.SQLCompiler):
         onclause_raw = join.onclause._compiler_dispatch(self, **kwargs)
 
         if onclause_raw.lower().find(' and ') >= 0:
-            print "----#####  onclause has an AND"
-            print "----#####  onclause: %s" % onclause_raw
+            print( "----#####  onclause has an AND" )
+            print( "----#####  onclause: %s" % onclause_raw )
 
         if mydebug == 1:
-            print "==========================================="
-            print "Left Raw: %s" % left_raw
-            print "Right Raw: %s" % right_raw
-            print "Onclause  Raw: %s" % onclause_raw
-            print "==========================================="
-            print "alias: %s" % join.alias
-            print "bind: %s" % join.bind
-            print "c: %s" % join.c
-            print "columns: %s" % join.columns
-            print "compare: %s" % join.compare
-            print "compile: %s" % join.compile
-            print "correspond_on_equivalents: %s" % join.correspond_on_equivalents
-            print "corresponding_column: %s" % join.corresponding_column
-            print "count: %s" % join.count
-            print "description: %s" % join.description
-            print "foreign_keys: %s" % join.foreign_keys
-            print "get_childreb: %s" % join.get_children
-            print "is_selectable: %s" % join.is_selectable
-            print "isouter: %s" % join.isouter
-            print "join: %s" % join.join
-            print "outerjoin: %s" % join.outerjoin
-            print "params: %s" % join.params
-            print "replace_selectable: %s" % join.replace_selectable
-            print "select: %s" % join.select
-            print "selectable: %s" % join.selectable
-            print whoyadaddy
-            print "==========================================="
-            print "==========================================="
-            print dir(join)
+            print( "===========================================" )
+            print( "Left Raw: %s" % left_raw )
+            print( "Right Raw: %s" % right_raw )
+            print( "Onclause  Raw: %s" % onclause_raw )
+            print( "===========================================" )
+            print( "alias: %s" % join.alias )
+            print( "bind: %s" % join.bind )
+            print( "c: %s" % join.c )
+            print( "columns: %s" % join.columns )
+            print( "compare: %s" % join.compare )
+            print( "compile: %s" % join.compile )
+            print( "correspond_on_equivalents: %s" % join.correspond_on_equivalents )
+            print( "corresponding_column: %s" % join.corresponding_column )
+            print( "count: %s" % join.count )
+            print( "description: %s" % join.description )
+            print( "foreign_keys: %s" % join.foreign_keys )
+            print( "get_childreb: %s" % join.get_children )
+            print( "is_selectable: %s" % join.is_selectable )
+            print( "isouter: %s" % join.isouter )
+            print( "join: %s" % join.join )
+            print( "outerjoin: %s" % join.outerjoin )
+            print( "params: %s" % join.params )
+            print( "replace_selectable: %s" % join.replace_selectable )
+            print( "select: %s" % join.select )
+            print( "selectable: %s" % join.selectable )
+            print( whoyadaddy )
+            print( "===========================================" )
+            print( "===========================================" )
+            print( dir(join) )
     
         # To Do: We need to handle RIGHT OUTER JOINS
         if join.isouter:
