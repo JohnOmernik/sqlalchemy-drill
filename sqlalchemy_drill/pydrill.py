@@ -5,21 +5,10 @@ Created on Thu Dec  1 08:58:12 2016
 @author: cgivre
 """
 from pydrill.dbapi import drill
-from pydrill.dbapi.common import UniversalSet
-from sqlalchemy import exc
-from sqlalchemy import types
-from sqlalchemy import util
 from sqlalchemy.engine import default
 from sqlalchemy.sql import compiler
-from .base import DrillExecutionContext, DrillDialect
-import decimal
-import re
+from .base import DrillExecutionContext, DrillDialect, DrillIdentifierPreparer, DrillCompiler
 
-
-try:
-    from sqlalchemy.sql.compiler import SQLCompiler
-except ImportError:
-    from sqlalchemy.sql.compiler import DefaultCompiler as SQLCompiler
 
 class DrillDialect_pydrill(default.DefaultDialect):
     name = 'drill'
@@ -35,6 +24,11 @@ class DrillDialect_pydrill(default.DefaultDialect):
     returns_unicode_strings = True
     description_encoding = None
     supports_native_boolean = True
+    storage_plugin = ""
+    workspace = ""
+    drill_connection = None    
+    drill_cursor = None
+    
 
     @classmethod
     def dbapi(cls):
@@ -48,16 +42,59 @@ class DrillDialect_pydrill(default.DefaultDialect):
             'username': url.username,
         }
         kwargs.update(url.query)
+        
+        #Save this for later.
+        self.host = url.host
+        self.port = url.port
+        self.username = url.username
+        
         if len(db_parts) == 1:
             kwargs['catalog'] = db_parts[0]
+            self.storage_plugin = db_parts[0]
         elif len(db_parts) == 2:
             kwargs['catalog'] = db_parts[0]
             kwargs['schema'] = db_parts[1]
+            self.storage_plugin = db_parts[0]
+            self.workspace = db_parts[1]
+            
         else:
             raise ValueError("Unexpected database format {}".format(url.database))
+        
         return ([], kwargs)
 
+    def connect(self, *cargs, **cparams):
+        connection = self.dbapi.connect(autocommit=True, *cargs, **cparams)
+        self.drill_connection = connection
+        self.drill_cursor = self.drill_connection.cursor()
+       
+        return connection
 
+
+    def get_table_names(self, connection, schema=None, **kw):
+        location = ""
+        if( len(self.workspace) > 0 ):
+            location = self.storage_plugin + "." + self.workspace
+        else:
+            location = self.storage_plugin
+        
+        from pydrill.client import PyDrill
+        drill = PyDrill(host=self.host, port=self.port)
+
+        file_dict = drill.query( "SHOW FILES IN " + location )
+       
+        temp = []
+        for row in file_dict:
+            temp.append( row['name'])
+        
+        table_names = tuple( temp )        
+        '''        
+        result = self.drill_cursor.fetchall()
+        print( result )        
+        table_names = [r[0] for r in result]
+        return table_names
+        '''
+        return table_names
+        
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
         # Drill has no support for primary keys.
         return []
@@ -77,3 +114,6 @@ class DrillDialect_pydrill(default.DefaultDialect):
     def _check_unicode_description(self, connection):
         # requests gives back Unicode strings
         return True
+
+class DrillExecutionContext_pydrill(DrillExecutionContext):
+    pass
