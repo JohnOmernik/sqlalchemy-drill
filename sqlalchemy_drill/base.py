@@ -24,6 +24,10 @@ class DrillCompiler(compiler.SQLCompiler):
         """
         return " FROM (values(1))"
 
+    def visit_fromclause(self, fromclause, **kwargs):
+        print( "VICTORY")
+        print( fromclause )
+
     # Strip schema
     def visit_table(self, table, asfrom=False, **kwargs):
         if asfrom:
@@ -137,6 +141,7 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
     def __init__(self, dialect):
         super(DrillIdentifierPreparer, self). \
             __init__(dialect, initial_quote='`', final_quote='`')
+
 
 
 class DrillDialect(default.DefaultDialect):
