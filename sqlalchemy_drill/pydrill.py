@@ -9,10 +9,9 @@ from __future__ import unicode_literals
 from distutils.version import StrictVersion
 from pydrill.dbapi import drill
 from pydrill.client import PyDrill
-from sqlalchemy import exc
-from sqlalchemy import types
+from sqlalchemy import exc, pool, types
 from sqlalchemy import util
-from sqlalchemy import VARCHAR, INTEGER, FLOAT, DATE, TIMESTAMP, TIME
+from sqlalchemy import VARCHAR, INTEGER, FLOAT, DATE, TIMESTAMP, TIME, Interval, DECIMAL, LargeBinary, BIGINT, SMALLINT
 from sqlalchemy.engine import default
 from sqlalchemy.sql import compiler
 #from .base import DrillCompiler
@@ -20,11 +19,12 @@ from sqlalchemy.sql import compiler
 import re
 import sqlalchemy
 
-
 try:
     from sqlalchemy.sql.compiler import SQLCompiler
 except ImportError:
     from sqlalchemy.sql.compiler import DefaultCompiler as SQLCompiler
+
+
 
 class DrillIdentifierPreparer(compiler.IdentifierPreparer):
     reserved_words = compiler.RESERVED_WORDS.copy()
@@ -34,42 +34,67 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
         super(DrillIdentifierPreparer, self). \
             __init__(dialect, initial_quote='`', final_quote='`')
 
+    def format_table(self, table, use_schema=True, name=None):
+        print("We're in!")
+        print( table )
+        return table
+
+    def format_schema(self, name, quote=None):
+        print( "Schema: ")
+        print( name )
+        return name
+
 
 try:
     from sqlalchemy.types import BigInteger
 except ImportError:
     from sqlalchemy.databases.mysql import MSBigInteger as BigInteger
-_type_map = {
-    'bigint': BigInteger,
-    'integer': types.Integer,
-    'boolean': types.Boolean,
-    'double': types.Float,
-    'varchar': types.String,
-    'timestamp': types.TIMESTAMP,
-    'date': types.DATE,
-}
 
-class
+_type_map = {
+    'bigint': types.BIGINT,
+    'binary': types.LargeBinary,
+    'boolean': types.BOOLEAN,
+    'date': types.DATE,
+    'decimal': types.DECIMAL,
+    'double': types.FLOAT,
+    'integer': types.INTEGER,
+    'interval': types.Interval,
+    'smallint': types.SMALLINT,
+    'timestamp': types.TIMESTAMP,
+    'time': types.TIME,
+    'varchar': types.String
+}
 
 
 class DrillCompiler_pydrill(compiler.SQLCompiler):
+    def default_from(self):
+        """Called when a ``SELECT`` statement has no froms,
+        and no ``FROM`` clause is to be appended.
+       Drill uses FROM values(1)
+        """
+        return " FROM (values(1))"
+
     def visit_char_length_func(self, fn, **kw):
         return 'length{}'.format(self.function_argspec(fn, **kw))
 
-    # Strip schema
     def visit_table(self, table, asfrom=False, **kwargs):
-        print( "VISIT TABLE..... AAAAAAAHHHHH")
         if asfrom:
-            return self.preparer.quote(table.name, '`')
+            storage_plugin = self.dialect.storage_plugin
+            workspace = self.dialect.workspace
+
+            full_table = storage_plugin + "." + workspace + "."
+            if not table.name.startswith( full_table ):
+                corrected_table = full_table + self.preparer.quote(table.name, '`')
+                print( "Fixed table: " + corrected_table)
+                return corrected_table
+            else:
+                return self.preparer.quote(table.name, '`')
         else:
             return ""
 
-    def visit_fromclause(self, fromclause, **kwargs):
-        print( "VICTORY")
-        print( fromclause )
-
     def visit_tablesample(self, tablesample, asfrom=False, **kw):
         print( tablesample)
+
 
 
 class DrillDialect_pydrill(default.DefaultDialect):
@@ -77,6 +102,7 @@ class DrillDialect_pydrill(default.DefaultDialect):
     driver = 'rest'
     preparer = DrillIdentifierPreparer
     statement_compiler = DrillCompiler_pydrill
+    poolclass = pool.SingletonThreadPool
     supports_alter = False
     supports_pk_autoincrement = False
     supports_default_values = False
@@ -94,6 +120,7 @@ class DrillDialect_pydrill(default.DefaultDialect):
         return drill
 
     def create_connect_args(self, url):
+
         db_parts = (url.database or 'drill').split('/')
         kwargs = {
             'host': url.host,
@@ -116,6 +143,7 @@ class DrillDialect_pydrill(default.DefaultDialect):
             self.storage_plugin = db_parts[0]
             self.workspace = db_parts[1]
 
+
         else:
             raise ValueError("Unexpected database format {}".format(url.database))
 
@@ -124,15 +152,20 @@ class DrillDialect_pydrill(default.DefaultDialect):
     def get_schema_names(self, connection, **kw):
         return [row.SCHEMA_NAME for row in connection.execute('SHOW DATABASES')]
 
+    def get_selected_workspace(self):
+        return self.workspace
+
+    def get_selected_storage_plugin(self):
+        return self.storage_plugin
+
     def has_table(self, connection, table_name, schema=None):
         try:
             self._get_table_columns(connection, table_name, schema)
             return True
         except exc.NoSuchTableError:
             return False
-
-
-    def get_columns(self, connection, table_name, schema=None, **kw):
+    '''
+    def get_columns():
         if len(self.workspace) > 0:
             table_name = self.storage_plugin + "." + self.workspace + ".`" + table_name + "`"
         else:
@@ -140,10 +173,7 @@ class DrillDialect_pydrill(default.DefaultDialect):
 
         q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})
 
-        # drill = PyDrill(host=self.host, port=self.port)
-        #queryResult = drill.query(q)
         columns = connection.execute(q)
-
         result = []
         for column_name in columns.keys():
             # TODO Handle types better
@@ -156,21 +186,45 @@ class DrillDialect_pydrill(default.DefaultDialect):
             }
 
             result.append(column)
-        print("RESULT: ")
-        print(result)
+
         return result
 
-    def get_foreign_keys(self, connection, table_name, schema=None, **kw):
-        """Drill has no support for foreign keys.  Returns an empty list."""
-        return []
+    '''
+    def get_columns(self, connection, table_name, schema=None, **kw):
+        if len(self.workspace) > 0:
+            table_name = self.storage_plugin + "." + self.workspace + ".`" + table_name + "`"
+        else:
+            table_name = self.storage_plugin + ".`" + table_name + "`"
 
-    def get_pk_constraint(self, connection, table_name, schema=None, **kw):
-        """Drill has no support for primary keys.  Retunrs an empty list."""
-        return []
+        q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})
 
-    def get_indexes(self, connection, table_name, schema=None, **kw):
-        """Drill has no support for indexes.  Returns an empty list. """
-        return[]
+
+        columns = connection.execute(q)
+        result = []
+        db = drill.connect(host=self.host, port=self.port)
+        cursor = db.cursor()
+        cursor.execute(q)
+        for info in cursor.description:
+            print( "ROW INFO!!")
+            print( info )
+            try:
+                coltype = _type_map[info[1]]
+            except KeyError:
+                #If the type is unknown, make it a VARCHAR
+                coltype = types.VARCHAR
+
+            column = {
+                "name": info[0],
+                "type": coltype,
+                "default": None,
+                "autoincrement": None,
+                "nullable": True,
+            }
+            print( column )
+            result.append(column)
+
+        return result
+
 
     def get_table_names(self, connection, schema=None, **kw):
         location = ""
@@ -190,6 +244,39 @@ class DrillDialect_pydrill(default.DefaultDialect):
 
         return table_names
 
+    def get_view_names(self, connection, schema=None, **kw):
+        location = ""
+        if (len(self.workspace) > 0):
+            location = self.storage_plugin + "." + self.workspace
+        else:
+            location = self.storage_plugin
+
+        drill = PyDrill(host=self.host, port=self.port)
+        file_dict = drill.query("SHOW TABLES IN " + location)
+
+        temp = []
+        for row in file_dict:
+            temp.append(row['name'])
+
+        table_names = tuple(temp)
+
+        return table_names
+
+    def get_foreign_keys(self, connection, table_name, schema=None, **kw):
+        """Drill has no support for foreign keys.  Returns an empty list."""
+        return []
+
+    def get_pk_constraint(self, connection, table_name, schema=None, **kw):
+        """Drill has no support for primary keys.  Retunrs an empty list."""
+        return []
+
+    def get_indexes(self, connection, table_name, schema=None, **kw):
+        """Drill has no support for indexes.  Returns an empty list. """
+        return[]
+
+
+
+
     def do_rollback(self, dbapi_connection):
         # No transactions for Drill
         pass
@@ -201,6 +288,7 @@ class DrillDialect_pydrill(default.DefaultDialect):
     def _check_unicode_description(self, connection):
         # requests gives back Unicode strings
         return True
+
 
 '''
 if StrictVersion(sqlalchemy.__version__) < StrictVersion('0.7.0'):

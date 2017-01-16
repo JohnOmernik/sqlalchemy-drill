@@ -24,6 +24,7 @@ class DrillCompiler(compiler.SQLCompiler):
         """
         return " FROM (values(1))"
 
+
     def visit_fromclause(self, fromclause, **kwargs):
         print( "VICTORY")
         print( fromclause )
