@@ -24,8 +24,8 @@ setup(name='sqlalchemy_drill',
       'Topic :: Database :: Front-Ends',
       ],
       keywords='SQLAlchemy Apache Drill',
-      author='John Omernik',
-      author_email='john@omernik.com',
+      author='John Omernik, Charles Givre',
+      author_email='john@omernik.com, cgivre@thedataist.com',
       license='Apache',
       packages=['sqlalchemy_drill'],
       include_package_data=True,
@@ -36,6 +36,7 @@ setup(name='sqlalchemy_drill',
          'sqlalchemy.dialects': [
               'drill = sqlalchemy_drill.pyodbc:DrillDialect_pyodbc',
               'drill.pyodbc = sqlalchemy_drill.pyodbc:DrillDialect_pyodbc',
+              'drill.pydrill = sqlalchemy_drill.pydrill:DrillDialect_pydrill',
               ]
         }
 )
