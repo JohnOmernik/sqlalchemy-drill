@@ -34,15 +34,6 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
         super(DrillIdentifierPreparer, self). \
             __init__(dialect, initial_quote='`', final_quote='`')
 
-    def format_table(self, table, use_schema=True, name=None):
-        print("We're in!")
-        print( table )
-        return table
-
-    def format_schema(self, name, quote=None):
-        print( "Schema: ")
-        print( name )
-        return name
 
 
 try:
@@ -91,6 +82,7 @@ class DrillCompiler_pydrill(compiler.SQLCompiler):
                 return self.preparer.quote(table.name, '`')
         else:
             return ""
+
 
     def visit_tablesample(self, tablesample, asfrom=False, **kw):
         print( tablesample)
@@ -164,32 +156,7 @@ class DrillDialect_pydrill(default.DefaultDialect):
             return True
         except exc.NoSuchTableError:
             return False
-    '''
-    def get_columns():
-        if len(self.workspace) > 0:
-            table_name = self.storage_plugin + "." + self.workspace + ".`" + table_name + "`"
-        else:
-            table_name = self.storage_plugin + ".`" + table_name + "`"
 
-        q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})
-
-        columns = connection.execute(q)
-        result = []
-        for column_name in columns.keys():
-            # TODO Handle types better
-            column = {
-                "name": column_name,
-                "type": VARCHAR,
-                "default": None,
-                "autoincrement": None,
-                "nullable": False,
-            }
-
-            result.append(column)
-
-        return result
-
-    '''
     def get_columns(self, connection, table_name, schema=None, **kw):
         if len(self.workspace) > 0:
             table_name = self.storage_plugin + "." + self.workspace + ".`" + table_name + "`"
