@@ -515,8 +515,8 @@ class Cursor(common.DBAPICursor):
         typeQuery += " LIMIT 1"
         typeQuery = sqlparse.format(typeQuery, reindent=True, keyword_case='upper')
 
-        drill = PyDrill(host=self._host, port=self._port)
-        fieldQueryResult = drill.query(typeQuery).to_dataframe()
+        #drill = PyDrill(host=self._host, port=self._port)
+        fieldQueryResult = self._conn.query(typeQuery).to_dataframe()
         tempTypes = fieldQueryResult.T.to_dict()[0]
 
         for column in columns:
