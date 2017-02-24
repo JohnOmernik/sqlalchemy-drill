@@ -9,7 +9,7 @@ from __future__ import unicode_literals
 import re
 import sqlparse
 from sqlalchemy_drill.drilldbapi import common
-from sqlalchemy_drill.drilldbapi import DBAPICursor as DBAPICursor
+from sqlalchemy_drill.drilldbapi.common import DBAPICursor as DBAPICursor
 from sqlalchemy_drill.drilldbapi.exceptions import *
 from pydrill.client import PyDrill
 from collections import OrderedDict
