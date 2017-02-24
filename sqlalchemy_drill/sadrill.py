@@ -127,7 +127,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
 #        print(cparams)
 #        return self.dbapi.PyDrill(autocommit=True, *cargs, **cparams)
 
-    def create_connect_args(self, url):
+    def create_connect_args(self, url, **kwargs):
 
         db_parts = (url.database or 'drill').split('/')
 
@@ -140,22 +140,18 @@ class DrillDialect_sadrill(default.DefaultDialect):
             drill_auth = url.username + ":" + p
         else:
             drill_auth = ""
-        kwargs = {
+
+        print("#####FDSDAS")
+        print(kwargs)
+        qargs = {
             'host': url.host,
             'port': url.port or 8047,
             'drill_auth':  drill_auth,
  #           'username': url.username,
         }
 
-        if use_ssl in url:
-            kwargs["use_ssl"] = url.use_ssl
-        if verify_certs in url:
-            kwargs["verify_certs"] = url.verify_certs
-        if ca_certs in url:
-            kwargs["ca_certs"] = url.ca_certs
 
-
-        kwargs.update(url.query)
+        qargs.update(url.query)
 
         # Save this for later.
         self.host = url.host
@@ -164,11 +160,11 @@ class DrillDialect_sadrill(default.DefaultDialect):
         self.username = url.username
 
         if len(db_parts) == 1:
-            kwargs['catalog'] = db_parts[0]
+            qargs['catalog'] = db_parts[0]
             self.storage_plugin = db_parts[0]
         elif len(db_parts) == 2:
-            kwargs['catalog'] = db_parts[0]
-            kwargs['schema'] = db_parts[1]
+            qargs['catalog'] = db_parts[0]
+            qargs['schema'] = db_parts[1]
             self.storage_plugin = db_parts[0]
             self.workspace = db_parts[1]
 
@@ -176,7 +172,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
         else:
             raise ValueError("Unexpected database format {}".format(url.database))
 
-        return ([], kwargs)
+        return ([], qargs)
 
     def get_schema_names(self, connection, **kw):
         return [row.SCHEMA_NAME for row in connection.execute('SHOW DATABASES')]
