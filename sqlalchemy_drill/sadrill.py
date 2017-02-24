@@ -214,6 +214,9 @@ class DrillDialect_sadrill(default.DefaultDialect):
             location = self.storage_plugin + "." + self.workspace
         else:
             location = self.storage_plugin
+        
+        print "******in get table names"
+        print (kw)
 
         drill = PyDrill(host=self.host, port=self.port)
         file_dict = drill.query("SHOW FILES IN " + location)
