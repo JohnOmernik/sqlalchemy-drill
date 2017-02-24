@@ -139,6 +139,10 @@ class DrillDialect_sadrill(default.DefaultDialect):
         else:
             raise ValueError("Unexpected database format {}".format(url.database))
 
+
+        print(kwargs)
+        print(url)
+        
         return ([], kwargs)
 
     def get_schema_names(self, connection, **kw):
