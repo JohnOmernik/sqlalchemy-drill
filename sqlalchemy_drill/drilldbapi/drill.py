@@ -237,6 +237,7 @@ class Cursor(common.DBAPICursor):
 
         #This bit of hackery is needed for SQLAlchemy and Superset
         #Puts backticks in the correct place
+        print("first")
         for plugin in self.get_enabled_storage_plugins().values():
             if plugin in operation:
                 pattern = plugin.replace( '.', '\.') + r'\.(\S+)'
@@ -249,6 +250,7 @@ class Cursor(common.DBAPICursor):
                         operation = operation.replace( oldTable, correctedTable)
 
         operation = re.sub(r'SELECT\s+FROM', r'SELECT \* FROM', operation)
+        print("second")
 
         #This bit of hackery is needed for SQLAlchemy and Superset
         #Superset for some reason generates queries where there is no space between the last field and the 'FROM' clause
