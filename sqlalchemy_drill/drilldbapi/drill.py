@@ -143,16 +143,16 @@ class Cursor(common.DBAPICursor):
         self._columns = OrderedDict()
         self._actual_cols = None
         self._connectargs = {"host":host, "port": port}
-        self.paramstyle = "pyformat"
+        #self.paramstyle = "pyformat"
 
-        if drill_auth in kwargs:
-            self._connectargs["drill_auth"] = drill_auth
-        if use_ssl in kwargs:
-            self._connectargs["use_ssl"] = use_ssl
-        if verify_certs in kwargs:
-            self._connectargs["verify_certs"] = verify_certs
-        if ca_certs in kwargs:
-            self._connectargs["ca_certs"] = ca_certs
+        #if drill_auth in kwargs:
+        #    self._connectargs["drill_auth"] = drill_auth
+        #if use_ssl in kwargs:
+        #    self._connectargs["use_ssl"] = use_ssl
+        #if verify_certs in kwargs:
+        #    self._connectargs["verify_certs"] = verify_certs
+        #if ca_certs in kwargs:
+        #    self._connectargs["ca_certs"] = ca_certs
         print("****** I am at init")
         print(self._connectargs)
 
