@@ -7,10 +7,10 @@ Created on Mon Nov 28 10:52:20 2016
 import abc
 import collections
 import time
-import  sqlalchemy_drill.dbapi.FIELD_TYPE
+import drilldbapi.FIELD_TYPE
 
 from future.utils import with_metaclass
-from sqlalchemy_drill.dbapi.exceptions import *
+from drilldbapi.exceptions import *
 
 class DBAPISet(frozenset):
 
