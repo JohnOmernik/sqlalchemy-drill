@@ -17,7 +17,7 @@ from collections import OrderedDict
 # PEP 249 module globals
 apilevel = '2.0'
 threadsafety = 2  # Threads may share the module and connections.
-paramstyle = 'pyformat' 
+paramstyle = 'pyformat'
 
 def connect(*args, **kwargs):
     """Constructor for creating a connection to the database. See class :py:class:`Connection` for
@@ -127,6 +127,17 @@ class Cursor(common.DBAPICursor):
         self._description = None
         self._columns = OrderedDict()
         self._actual_cols = None
+        self._connectargs = {"host":host, "port": port}
+
+        if drill_auth in kwargs:
+            self._connectargs["drill_auth"] = drill_auth
+        if use_ssl in kwargs:
+            self._connectargs["use_ssl"] = use_ssl
+        if verify_certs in kwargs:
+            self._connectargs["verify_certs"] = verify_certs
+        if ca_certs in kwargs:
+            self._connectargs["ca_certs"] = ca_certs
+
 
     def get_schema(self):
         return self._schema
@@ -229,7 +240,7 @@ class Cursor(common.DBAPICursor):
         self._operation = operation
 
 
-        drill = PyDrill(host=self._host, port=self._port)
+        drill = PyDrill(self._connectargs)
         self._data = drill.query(operation)
         self._actual_cols = self._extract_fields( self._operation )
         self._columns = self._data.columns
