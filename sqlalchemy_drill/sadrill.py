@@ -114,10 +114,20 @@ class DrillDialect_sadrill(default.DefaultDialect):
     def create_connect_args(self, url):
 
         db_parts = (url.database or 'drill').split('/')
+
+        if url.username:
+            if url.password:
+                p = url.password
+            else:
+                p = ""
+    
+            drill_auth = url.username + ":" + p
+        else:
+            drill_auth = ""
         kwargs = {
             'host': url.host,
             'port': url.port or 8047,
-            'drill_auth': url.username + ":" + url.password,
+            'drill_auth':  drill_auth,
  #           'username': url.username,
         }
         kwargs.update(url.query)
@@ -125,7 +135,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
         # Save this for later.
         self.host = url.host
         self.port = url.port
-        self.drill_auth = url.username + ":" + url.password
+        self.drill_auth = drill_auth
         self.username = url.username
 
         if len(db_parts) == 1:
@@ -144,7 +154,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         print(kwargs)
         print(url)
-        
         return ([], kwargs)
 
     def get_schema_names(self, connection, **kw):

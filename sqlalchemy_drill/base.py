@@ -167,8 +167,8 @@ class DrillDialect(default.DefaultDialect):
 
     def connect(self, *cargs, **cparams):
         print ("*********")
-        print (cargs)
-        print (cparams)
+        print (str(cargs))
+        print (str(cparams))
         return self.dbapi.PyDrill(autocommit=True, *cargs, **cparams)
 
     def create_connect_args(self, url):
