@@ -109,7 +109,13 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
     @classmethod
     def dbapi(cls):
+        print("########### in sadrill.dbapi")
         return drill
+    def connect(self, *cargs, **cparams):
+        print("############ In sadrill.DrillDialect.connect"
+        print(cargs)
+        print(cparams)
+        return self.dbapi.PyDrill(autocommit=True, *cargs, **cparams)
 
     def create_connect_args(self, url):
 
