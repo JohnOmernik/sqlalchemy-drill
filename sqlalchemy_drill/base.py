@@ -162,11 +162,14 @@ class DrillDialect(default.DefaultDialect):
 
     @classmethod
     def dbapi(cls):
-        import pydrill as module
+        import pydrill.client as module
         return module
 
     def connect(self, *cargs, **cparams):
-        return self.dbapi.connect(autocommit=True, *cargs, **cparams)
+        print ("*********")
+        print (cargs)
+        print (cparams)
+        return self.dbapi.PyDrill(autocommit=True, *cargs, **cparams)
 
     def create_connect_args(self, url):
         opts = url.translate_connect_args()

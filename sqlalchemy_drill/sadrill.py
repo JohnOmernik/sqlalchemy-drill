@@ -117,13 +117,15 @@ class DrillDialect_sadrill(default.DefaultDialect):
         kwargs = {
             'host': url.host,
             'port': url.port or 8047,
-            'username': url.username,
+            'drill_auth': url.username + ":" + url.password,
+ #           'username': url.username,
         }
         kwargs.update(url.query)
 
         # Save this for later.
         self.host = url.host
         self.port = url.port
+        self.drill_auth = url.username + ":" + url.password
         self.username = url.username
 
         if len(db_parts) == 1:
