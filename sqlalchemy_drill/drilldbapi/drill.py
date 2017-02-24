@@ -34,7 +34,7 @@ class Connection(object):
     """
     def __init__(self, *args, **kwargs):
         self._kwargs = kwargs
-        self._args = args
+        self._args = args#
 
     def close(self):
         """Closes active connection to Drill.  """
