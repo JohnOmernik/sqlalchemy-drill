@@ -270,7 +270,7 @@ class Cursor(common.DBAPICursor):
         print("********* IAM at execute*****")
   #      print(self._connectargs)
    #     drill = PyDrill(self._connectargs)
-        self._data = self._conn.query(operation)
+        self._data = self._conn.execute(operation)
         self._actual_cols = self._extract_fields( self._operation )
         self._columns = self._data.columns
 
@@ -522,7 +522,7 @@ class Cursor(common.DBAPICursor):
         typeQuery = sqlparse.format(typeQuery, reindent=True, keyword_case='upper')
 
         #drill = PyDrill(host=self._host, port=self._port)
-        fieldQueryResult = self._conn.query(typeQuery).to_dataframe()
+        fieldQueryResult = self._conn.execute(typeQuery).to_dataframe()
         tempTypes = fieldQueryResult.T.to_dict()[0]
 
         for column in columns:
@@ -538,7 +538,7 @@ class Cursor(common.DBAPICursor):
         :return: List of enabled storage plugins
         """
         #drill = PyDrill(host=self._host, port=self._port)
-        plugins = self._conn.query("SHOW DATABASES").to_dataframe().to_dict()
+        plugins = self._conn.execute("SHOW DATABASES").to_dataframe().to_dict()
         return plugins['SCHEMA_NAME']
 
     def _get_type_code(self, type):
