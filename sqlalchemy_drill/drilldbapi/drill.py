@@ -43,15 +43,17 @@ class Connection(object):
         print("args")
         print(args)
     
-        self._conn = PyDrill(self._connectargs)
+        self._conn = PyDrill(self._kwargs)
 
     def close(self):
         """Closes active connection to Drill.  """
         self.drill = None
 
-    def execute(self):
+    def execute(self, q):
         """ Executes a query!"""
         print("in Connection.execute")
+        return self._conn.query(q)
+
 
     def commit(self):
         """Drill does not support transactions, so this does nothing."""
