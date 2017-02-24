@@ -35,11 +35,11 @@ class Connection(object):
     def __init__(self, *args, **kwargs):
         self._kwargs = kwargs
         self._args = args
-                     
+
     def close(self):
-        """Closes active connection to Drill.  """         
+        """Closes active connection to Drill.  """
         self.drill = None
-        
+
     def commit(self):
         """Drill does not support transactions, so this does nothing."""
         pass
@@ -47,7 +47,7 @@ class Connection(object):
     def rollback(self):
         """Drill does not support transactions, so this does nothing."""
         pass
-    
+
     def cursor(self):
         """Return a new :py:class:`Cursor` object using the connection."""
         return Cursor(*self._args, **self._kwargs)

@@ -162,7 +162,7 @@ class DrillDialect(default.DefaultDialect):
 
     @classmethod
     def dbapi(cls):
-        import pyodbc as module
+        import pydrill as module
         return module
 
     def connect(self, *cargs, **cparams):
