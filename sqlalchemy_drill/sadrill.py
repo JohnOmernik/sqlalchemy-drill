@@ -8,7 +8,7 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from distutils.version import StrictVersion
 from sqlalchemy_drill.drilldbapi import drill
-from pydrill.client import PyDrill
+#from pydrill.client import PyDrill
 from sqlalchemy import exc, pool, types
 from sqlalchemy import util
 from sqlalchemy import VARCHAR, INTEGER, FLOAT, DATE, TIMESTAMP, TIME, Interval, DECIMAL, LargeBinary, BIGINT, SMALLINT
@@ -93,7 +93,6 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
 
 class DrillDialect_sadrill(default.DefaultDialect):
     name = 'drill'
-    paramstyle = "pyformat"
     driver = 'rest'
     preparer = DrillIdentifierPreparer
     statement_compiler = DrillCompiler_sadrill
@@ -113,7 +112,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
     @classmethod
 
     def dbapi(cls):
-        import pydrill.client as module
+        import drilldbapi.drill as module
         return module
 
     def connect(self, *cargs, **cparams):
