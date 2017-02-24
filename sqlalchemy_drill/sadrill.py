@@ -194,7 +194,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})
 
-
+        print("in get columns!!!!!")
         columns = connection.execute(q)
         result = []
         db = drill.connect(host=self.host, port=self.port)
