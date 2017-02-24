@@ -35,8 +35,8 @@ setup(name='sqlalchemy_drill',
       zip_safe=False,
       entry_points={
          'sqlalchemy.dialects': [
-              'drill = sqlalchemy_drill.pydrill:DrillDialect_pydrill',
-              'drill.pydrill = sqlalchemy_drill.pydrill:DrillDialect_pydrill',
+              'drill = sqlalchemy_drill.sadrill:DrillDialect_sadrill',
+              'drill.sadrill = sqlalchemy_drill.sadrill:DrillDialect_sadrill',
               ]
         }
 )
