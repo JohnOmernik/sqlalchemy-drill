@@ -145,6 +145,8 @@ class DrillDialect_sadrill(default.DefaultDialect):
  #           'username': url.username,
         }
         kwargs.update(url.query)
+        
+        kwargs['paramstyle'] = 'pyformat'
 
         # Save this for later.
         self.host = url.host
