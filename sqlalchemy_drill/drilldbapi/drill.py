@@ -128,6 +128,7 @@ class Cursor(common.DBAPICursor):
         self._columns = OrderedDict()
         self._actual_cols = None
         self._connectargs = {"host":host, "port": port}
+        self.paramstyle = "pyformat"
 
         if drill_auth in kwargs:
             self._connectargs["drill_auth"] = drill_auth

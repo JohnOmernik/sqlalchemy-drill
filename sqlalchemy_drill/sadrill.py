@@ -19,6 +19,8 @@ from sqlalchemy.sql import compiler
 import re
 import sqlalchemy
 
+
+
 try:
     from sqlalchemy.sql.compiler import SQLCompiler
 except ImportError:
@@ -91,6 +93,7 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
 
 class DrillDialect_sadrill(default.DefaultDialect):
     name = 'drill'
+    paramstyle = "pyformat"
     driver = 'rest'
     preparer = DrillIdentifierPreparer
     statement_compiler = DrillCompiler_sadrill
