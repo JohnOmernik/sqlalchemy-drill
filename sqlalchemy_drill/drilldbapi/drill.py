@@ -137,7 +137,8 @@ class Cursor(common.DBAPICursor):
             self._connectargs["verify_certs"] = verify_certs
         if ca_certs in kwargs:
             self._connectargs["ca_certs"] = ca_certs
-
+        print("****** I am at init")
+        print(self._connectargs)
 
     def get_schema(self):
         return self._schema
@@ -239,7 +240,8 @@ class Cursor(common.DBAPICursor):
 
         self._operation = operation
 
-
+        print("********* IAM at execute*****")
+        print(self._connectargs)
         drill = PyDrill(self._connectargs)
         self._data = drill.query(operation)
         self._actual_cols = self._extract_fields( self._operation )
