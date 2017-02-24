@@ -142,11 +142,10 @@ class DrillDialect_sadrill(default.DefaultDialect):
             'host': url.host,
             'port': url.port or 8047,
             'drill_auth':  drill_auth,
+            'paramstyle': 'pyformat',
  #           'username': url.username,
         }
         kwargs.update(url.query)
-        
-        kwargs['paramstyle'] = 'pyformat'
 
         # Save this for later.
         self.host = url.host
