@@ -531,8 +531,8 @@ class Cursor(common.DBAPICursor):
         :param self:
         :return: List of enabled storage plugins
         """
-        drill = PyDrill(host=self._host, port=self._port)
-        plugins = drill.query("SHOW DATABASES").to_dataframe().to_dict()
+        #drill = PyDrill(host=self._host, port=self._port)
+        plugins = self._conn.query("SHOW DATABASES").to_dataframe().to_dict()
         return plugins['SCHEMA_NAME']
 
     def _get_type_code(self, type):
