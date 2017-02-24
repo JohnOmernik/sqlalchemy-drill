@@ -145,7 +145,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
         print(kwargs)
         qargs = {
             'host': url.host,
-            'port': url.port or 8047,
+            'port': url.port or 8048,
             'drill_auth':  drill_auth,
  #           'username': url.username,
         }
