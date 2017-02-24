@@ -134,7 +134,7 @@ class Cursor(common.DBAPICursor):
 #        self._catalog = catalog
 #        self._schema = schema
 #        self._arraysize = 1
-#        self._poll_interval = poll_interval
+        self._poll_interval = poll_interval
 #        self._source = source
 #        self._session_props = session_props if session_props is not None else {}
         #self._autocommit = autocommit
