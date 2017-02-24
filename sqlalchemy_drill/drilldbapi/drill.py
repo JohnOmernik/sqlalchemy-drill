@@ -113,8 +113,7 @@ class Cursor(common.DBAPICursor):
 
     ]
 
-    def __init__(self, host, port='8047', username=None, catalog='drill', schema='dfs',
-                 poll_interval=1, source='pydrill', session_props=None, **kwargs):
+    def __init__(self,  **kwargs):
         """
         :param host: hostname to connect to, e.g. ``localhost``
         :param port: int -- port, defaults to 8047
@@ -125,24 +124,24 @@ class Cursor(common.DBAPICursor):
             update, defaults to a second
         :param source: string -- arbitrary identifier (shows up in the Presto monitoring page)
         """
-        super(Cursor, self).__init__(poll_interval)
-        # Config
-        self._host = host
-        self._port = port
-        #self._username = username or getpass.getuser()
-        self._catalog = catalog
-        self._schema = schema
-        self._arraysize = 1
-        self._poll_interval = poll_interval
-        self._source = source
-        self._session_props = session_props if session_props is not None else {}
+#        super(Cursor, self).__init__(poll_interval)
+#        # Config
+#        self._host = host
+#        self._port = port
+#        #self._username = username or getpass.getuser()
+#        self._catalog = catalog
+#        self._schema = schema
+#        self._arraysize = 1
+#        self._poll_interval = poll_interval
+#        self._source = source
+#        self._session_props = session_props if session_props is not None else {}
         #self._autocommit = autocommit
-        self._reset_state()
-        self._rownumber = 0
-        self._description = None
-        self._columns = OrderedDict()
-        self._actual_cols = None
-        self._connectargs = {"host":host, "port": port}
+ #       self._reset_state()
+ #       self._rownumber = 0
+ #       self._description = None
+ #       self._columns = OrderedDict()
+ #       self._actual_cols = None
+ #       self._connectargs = {"host":host, "port": port}
         #self.paramstyle = "pyformat"
 
         #if drill_auth in kwargs:
@@ -153,8 +152,8 @@ class Cursor(common.DBAPICursor):
         #    self._connectargs["verify_certs"] = verify_certs
         #if ca_certs in kwargs:
         #    self._connectargs["ca_certs"] = ca_certs
-        print("****** I am at init")
-        print(self._connectargs)
+ #       print("****** I am at init")
+ #       print(self._connectargs)
 
     def get_schema(self):
         return self._schema
@@ -218,11 +217,15 @@ class Cursor(common.DBAPICursor):
         """Drill does not support transactions, so this does nothing."""        
         raise NotSupportedError("Drill does not support stored procedures")  
     
-    def execute(self, operation, parameters=None, async=False):
+    def execute(self, operation, parameters=None, async=False, **kwargs):
         """Prepare and execute a database operation (query or command).
 
         Return values are not defined.
         """
+
+        print("In cursor.execute")
+        print(kwargs)
+
         self._reset_state()
         self._state = self._STATE_RUNNING
 
