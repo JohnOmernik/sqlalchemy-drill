@@ -7,7 +7,7 @@ Created on Thu Dec  1 08:58:12 2016
 from __future__ import absolute_import
 from __future__ import unicode_literals
 from distutils.version import StrictVersion
-from pydrill.dbapi import drill
+from sqlalchemy_drill.dbapi import drill
 from pydrill.client import PyDrill
 from sqlalchemy import exc, pool, types
 from sqlalchemy import util

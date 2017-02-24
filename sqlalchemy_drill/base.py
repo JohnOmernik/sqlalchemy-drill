@@ -39,7 +39,7 @@ class DrillCompiler(compiler.SQLCompiler):
     def visit_join(self, join, asfrom=False, **kwargs):
         mydebug = 0
         # The main goal of this visit_join is to pull apart the JOIN and add the table aliases to the ON Clause as Drill is finding ambiguous columns. 
-        # Pulls apart the JOIN. Todo: More work to understand what we know about a JOIN and ensure we catching all cases        
+        # Pulls apart the JOIN. Todo: More work to understand what we know about a JOIN and ensure we catching all case
         left_raw = join.left._compiler_dispatch(self, asfrom=True, **kwargs)
         right_raw = join.right._compiler_dispatch(self, asfrom=True, **kwargs)
         onclause_raw = join.onclause._compiler_dispatch(self, **kwargs)
@@ -206,7 +206,7 @@ class DrillDialect(default.DefaultDialect):
         table_names = [r[0] for r in result]
         return table_names
 
-    # The following three functions are needed to ensure drill returns columns to caravel
+    # The following three functions are needed to ensure drill returns columns to superset
     def get_primary_keys(self, connection, table_name, schema=None, **kw):
         return []
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
