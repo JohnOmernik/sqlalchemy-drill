@@ -7,7 +7,7 @@ Created on Thu Dec  1 08:58:12 2016
 from __future__ import absolute_import
 from __future__ import unicode_literals
 from distutils.version import StrictVersion
-from sqlalchemy_drill.drilldbapi import drill
+#from sqlalchemy_drill.drilldbapi import drill
 #from pydrill.client import PyDrill
 from sqlalchemy import exc, pool, types
 from sqlalchemy import util
@@ -112,7 +112,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
     @classmethod
 
     def dbapi(cls):
-        import drilldbapi.drill as module
+        import sqlalchemy_drill.drilldbapi.drill as module
         return module
 
     def connect(self, *cargs, **cparams):
