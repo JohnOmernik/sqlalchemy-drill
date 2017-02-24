@@ -65,7 +65,7 @@ class Connection(object):
 
     def cursor(self):
         """Return a new :py:class:`Cursor` object using the connection."""
-        return Cursor(*self._args, **self._kwargs)
+        return Cursor(self._conn, **self._kwargs)
 
 
 class Cursor(common.DBAPICursor):
@@ -113,7 +113,7 @@ class Cursor(common.DBAPICursor):
 
     ]
 
-    def __init__(self,  **kwargs):
+    def __init__(self, conn, **kwargs):
         """
         :param host: hostname to connect to, e.g. ``localhost``
         :param port: int -- port, defaults to 8047
@@ -125,6 +125,7 @@ class Cursor(common.DBAPICursor):
         :param source: string -- arbitrary identifier (shows up in the Presto monitoring page)
         """
         print("In cursor init")
+        print(conn)
         print(kwargs)
       #  super(Cursor, self).__init__(poll_interval)
 #        # Config
