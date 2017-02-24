@@ -8,7 +8,8 @@ from future.utils import with_metaclass
 import abc
 import collections
 import time
-import sqlalchemy_drill.drilldbapi.FIELD_TYPE
+from . import FIELD_TYPE
+#import sqlalchemy_drill.drilldbapi.FIELD_TYPE
 from sqlalchemy_drill.drilldbapi.exceptions import *
 
 class DBAPISet(frozenset):
