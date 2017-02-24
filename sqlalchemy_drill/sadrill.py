@@ -144,9 +144,17 @@ class DrillDialect_sadrill(default.DefaultDialect):
             'host': url.host,
             'port': url.port or 8047,
             'drill_auth':  drill_auth,
-            'paramstyle': 'pyformat',
  #           'username': url.username,
         }
+
+        if use_ssl in url:
+            kwargs["use_ssl"] = url.use_ssl
+        if verify_certs in url:
+            kwargs["verify_certs"] = url.verify_certs
+        if ca_certs in url:
+            kwargs["ca_certs"] = url.ca_certs
+
+
         kwargs.update(url.query)
 
         # Save this for later.
