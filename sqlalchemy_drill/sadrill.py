@@ -215,7 +215,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
         else:
             location = self.storage_plugin
         
-        print "******in get table names"
+        print("******in get table names")
         print (kw)
 
         drill = PyDrill(host=self.host, port=self.port)
