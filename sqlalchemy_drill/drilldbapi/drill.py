@@ -126,10 +126,10 @@ class Cursor(common.DBAPICursor):
         """
         self._conn = conn
         print("In cursor init")
-      #  super(Cursor, self).__init__(poll_interval)
+        super(Cursor, self).__init__(poll_interval)
 #        # Config
-        self._host = kwargs['host']
-        self._port = kwargs['port']
+#        self._host = kwargs['host']
+#        self._port = kwargs['port']
 #        #self._username = username or getpass.getuser()
 #        self._catalog = catalog
 #        self._schema = schema
@@ -154,7 +154,7 @@ class Cursor(common.DBAPICursor):
         #    self._connectargs["verify_certs"] = verify_certs
         #if ca_certs in kwargs:
         #    self._connectargs["ca_certs"] = ca_certs
- #       print("****** I am at init")
+        print("****** I done at init")
  #       print(self._connectargs)
 
     def get_schema(self):
@@ -219,19 +219,20 @@ class Cursor(common.DBAPICursor):
         """Drill does not support transactions, so this does nothing."""        
         raise NotSupportedError("Drill does not support stored procedures")  
     
-    def execute(self, operation, parameters=None, async=False, **kwargs):
+    def execute(self, operation, parameters=None, async=False):
         """Prepare and execute a database operation (query or command).
 
         Return values are not defined.
         """
 
         print("In cursor.execute")
-        print(kwargs)
 
         self._reset_state()
         self._state = self._STATE_RUNNING
 
+        print("In parsing execute")
         #Clear out newlines in the query:
+        print(operation)
         operation = operation.replace( '\n',' ')
 
         #This bit of hackery is needed for SQLAlchemy and Superset
@@ -258,7 +259,7 @@ class Cursor(common.DBAPICursor):
 
         operation = operation.replace( "SELECT FROM", "SELECT * FROM")
         operation = operation.replace( '"', '`')
-
+        print("operation")
         self._operation = operation
 
         print("********* IAM at execute*****")
