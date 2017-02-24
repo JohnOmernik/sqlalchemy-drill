@@ -57,7 +57,7 @@ _type_map = {
 }
 
 
-class DrillCompiler_pydrill(compiler.SQLCompiler):
+class DrillCompiler_sadrill(compiler.SQLCompiler):
     def default_from(self):
         """Called when a ``SELECT`` statement has no froms,
         and no ``FROM`` clause is to be appended.
@@ -89,11 +89,11 @@ class DrillCompiler_pydrill(compiler.SQLCompiler):
 
 
 
-class DrillDialect_pydrill(default.DefaultDialect):
+class DrillDialect_sadrill(default.DefaultDialect):
     name = 'drill'
     driver = 'rest'
     preparer = DrillIdentifierPreparer
-    statement_compiler = DrillCompiler_pydrill
+    statement_compiler = DrillCompiler_sadrill
     poolclass = pool.SingletonThreadPool
     supports_alter = False
     supports_pk_autoincrement = False
