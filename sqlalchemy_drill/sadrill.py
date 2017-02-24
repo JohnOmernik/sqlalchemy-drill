@@ -108,14 +108,22 @@ class DrillDialect_sadrill(default.DefaultDialect):
     workspace = ""
 
     @classmethod
+
     def dbapi(cls):
-        print("########### in sadrill.dbapi")
-        return drill
+        import pydrill.client as module
+        return module
+
     def connect(self, *cargs, **cparams):
-        print("############ In sadrill.DrillDialect.connect")
-        print(cargs)
-        print(cparams)
         return self.dbapi.PyDrill(autocommit=True, *cargs, **cparams)
+
+#    def dbapi(cls):
+#        print("########### in sadrill.dbapi")
+#        return drill
+#    def connect(self, *cargs, **cparams):
+#        print("############ In sadrill.DrillDialect.connect")
+#        print(cargs)
+#        print(cparams)
+#        return self.dbapi.PyDrill(autocommit=True, *cargs, **cparams)
 
     def create_connect_args(self, url):
 
@@ -157,9 +165,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
         else:
             raise ValueError("Unexpected database format {}".format(url.database))
 
-
-        print(kwargs)
-        print(url)
         return ([], kwargs)
 
     def get_schema_names(self, connection, **kw):
@@ -221,13 +226,13 @@ class DrillDialect_sadrill(default.DefaultDialect):
         else:
             location = self.storage_plugin
         
-        print("******in get table names")
-        print(connection)
-        print(self)
-        print (kw)
+#        print("******in get table names")
+#        print(connection)
+#        print(self)
+#        print (kw)
 
-        drill = PyDrill(host=self.host, port=self.port)
-        file_dict = drill.query("SHOW FILES IN " + location)
+ #       drill = PyDrill(host=self.host, port=self.port)
+        file_dict = connection.query("SHOW FILES IN " + location)
 
         temp = []
         for row in file_dict:
@@ -244,8 +249,8 @@ class DrillDialect_sadrill(default.DefaultDialect):
         else:
             location = self.storage_plugin
 
-        drill = PyDrill(host=self.host, port=self.port)
-        file_dict = drill.query("SHOW TABLES IN " + location)
+#        drill = PyDrill(host=self.host, port=self.port)
+        file_dict = connection.query("SHOW TABLES IN " + location)
 
         temp = []
         for row in file_dict:
