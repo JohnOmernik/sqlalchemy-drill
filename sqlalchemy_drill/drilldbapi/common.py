@@ -4,13 +4,12 @@ Created on Mon Nov 28 10:52:20 2016
 
 @author: cgivre
 """
+from future.utils import with_metaclass
 import abc
 import collections
 import time
-import drilldbapi.FIELD_TYPE
-
-from future.utils import with_metaclass
-from drilldbapi.exceptions import *
+import sqlalchemy_drill.drilldbapi.FIELD_TYPE
+from sqlalchemy_drill.drilldbapi.exceptions import *
 
 class DBAPISet(frozenset):
 

@@ -8,9 +8,9 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 import re
 import sqlparse
-from drilldbapi import common
-from drilldbapi import DBAPICursor as DBAPICursor
-from drilldbapi.exceptions import *
+from sqlalchemy_drill.drilldbapi import common
+from sqlalchemy_drill.drilldbapi import DBAPICursor as DBAPICursor
+from sqlalchemy_drill.drilldbapi.exceptions import *
 from pydrill.client import PyDrill
 from collections import OrderedDict
 
