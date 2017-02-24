@@ -113,7 +113,7 @@ class Cursor(common.DBAPICursor):
 
     ]
 
-    def __init__(self, conn, **kwargs):
+    def __init__(self, conn, poll_interval=1, **kwargs):
         """
         :param host: hostname to connect to, e.g. ``localhost``
         :param port: int -- port, defaults to 8047
