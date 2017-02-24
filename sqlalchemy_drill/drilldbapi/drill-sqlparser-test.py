@@ -39,7 +39,7 @@ _BIG_INT_FUNCTIONS = [
 
 def get_column_types( query ):
 
-    drill = PyDrill(host='localhost', port=8047)
+    drill = PyDrill(host='localhost', port=8049)
     data = drill.query(query)
     columns = data.columns
     types = {}
