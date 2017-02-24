@@ -34,11 +34,24 @@ class Connection(object):
     """
     def __init__(self, *args, **kwargs):
         self._kwargs = kwargs
-        self._args = args#
+        self._args = args
+
+        print("In Conn init:")
+        print("kwargs")
+
+        print(kwargs)
+        print("args")
+        print(args)
+    
+        self._conn = PyDrill(self._connectargs)
 
     def close(self):
         """Closes active connection to Drill.  """
         self.drill = None
+
+    def execute(self):
+        """ Executes a query!"""
+        print("in Connection.execute")
 
     def commit(self):
         """Drill does not support transactions, so this does nothing."""
