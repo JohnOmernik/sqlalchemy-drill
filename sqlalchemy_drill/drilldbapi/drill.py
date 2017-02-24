@@ -238,7 +238,10 @@ class Cursor(common.DBAPICursor):
         #This bit of hackery is needed for SQLAlchemy and Superset
         #Puts backticks in the correct place
         print("first")
-        for plugin in self.get_enabled_storage_plugins().values():
+    
+        myplugsins = self.get_enabled_storage_plugins().values()
+        print("Gotplugins")
+        for plugin in myplugins:
             if plugin in operation:
                 pattern = plugin.replace( '.', '\.') + r'\.(\S+)'
                 tables = re.findall(pattern, operation, re.IGNORECASE)
