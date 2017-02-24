@@ -124,7 +124,9 @@ class Cursor(common.DBAPICursor):
             update, defaults to a second
         :param source: string -- arbitrary identifier (shows up in the Presto monitoring page)
         """
-#        super(Cursor, self).__init__(poll_interval)
+        print("In cursor init")
+        print(kwargs)
+      #  super(Cursor, self).__init__(poll_interval)
 #        # Config
 #        self._host = host
 #        self._port = port
@@ -260,8 +262,8 @@ class Cursor(common.DBAPICursor):
         self._operation = operation
 
         print("********* IAM at execute*****")
-        print(self._connectargs)
-        drill = PyDrill(self._connectargs)
+  #      print(self._connectargs)
+   #     drill = PyDrill(self._connectargs)
         self._data = drill.query(operation)
         self._actual_cols = self._extract_fields( self._operation )
         self._columns = self._data.columns
