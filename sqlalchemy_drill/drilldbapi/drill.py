@@ -44,7 +44,8 @@ class Connection(object):
     def execute(self, q):
         """ Executes a query!"""
         print("######### in Connection.execute")
-        return self._conn.query(q)
+        return cursor(q)
+#        return self._conn.quer(q)
 
 
     def commit(self):
@@ -55,9 +56,9 @@ class Connection(object):
         """Drill does not support transactions, so this does nothing."""
         pass
 
-    def cursor(self):
+    def cursor(self, q):
         """Return a new :py:class:`Cursor` object using the connection."""
-        return Cursor(self._conn, **self._kwargs)
+        return Cursor(self._conn, **self._kwargs).execute(q)
 
 
 class Cursor(common.DBAPICursor):
