@@ -209,14 +209,10 @@ class DrillDialect_sadrill(default.DefaultDialect):
 #        cursor = db.cursor()
  #       cursor.execute(q)
 
-        for info in cursor.description:
+#        for info in cursor.description:
         for info in cursor:
-    #        print( "ROW INFO!!")
-     #       print( info )
-      #      print(info.keys)
-       #     print(info.items)
-        #    print(info.values)
-
+            print( "ROW INFO!!")
+            print( info )
 
             cname = info[0]
             bisnull = True
