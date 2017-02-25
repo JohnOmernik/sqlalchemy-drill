@@ -39,8 +39,6 @@ class Connection(object):
         print("In Conn init:")
         print(self._kwargs)
         self._conn = PyDrill(**kwargs)
-        print(self._conn.is_active())
-        print(self._conn.query("show schemas"))
 
     def close(self):
         """Closes active connection to Drill.  """
@@ -238,10 +236,7 @@ class Cursor(common.DBAPICursor):
 
         #This bit of hackery is needed for SQLAlchemy and Superset
         #Puts backticks in the correct place
-        print("first")
-    
-        myplugsins = self.get_enabled_storage_plugins().values()
-        print("Gotplugins")
+        myplugins = self.get_enabled_storage_plugins().values()
         for plugin in myplugins:
             if plugin in operation:
                 pattern = plugin.replace( '.', '\.') + r'\.(\S+)'
@@ -254,7 +249,6 @@ class Cursor(common.DBAPICursor):
                         operation = operation.replace( oldTable, correctedTable)
 
         operation = re.sub(r'SELECT\s+FROM', r'SELECT \* FROM', operation)
-        print("second")
 
         #This bit of hackery is needed for SQLAlchemy and Superset
         #Superset for some reason generates queries where there is no space between the last field and the 'FROM' clause
@@ -265,7 +259,6 @@ class Cursor(common.DBAPICursor):
 
         operation = operation.replace( "SELECT FROM", "SELECT * FROM")
         operation = operation.replace( '"', '`')
-        print("operation")
         self._operation = operation
 
         print("********* IAM at execute*****")
@@ -538,12 +531,8 @@ class Cursor(common.DBAPICursor):
         :param self:
         :return: List of enabled storage plugins
         """
-        print("In get storage plugins")
-        print(self._myconn)
         #drill = PyDrill(host=self._host, port=self._port)
         plugins = self._myconn.query("SHOW DATABASES").to_dataframe().to_dict()
-        print ("Plugs ran")
-        print (plugins)
         return plugins['SCHEMA_NAME']
 
     def _get_type_code(self, type):
