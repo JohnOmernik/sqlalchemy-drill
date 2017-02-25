@@ -204,6 +204,8 @@ class DrillDialect_sadrill(default.DefaultDialect):
  #       cursor = connection.cursor()
 #        cursor = db.cursor()
         #cursor.execute(q)
+        print(dir(cursor))
+        print(type(cursor))
         for info in cursor.description:
             print( "ROW INFO!!")
             print( info )
