@@ -206,7 +206,10 @@ class DrillDialect_sadrill(default.DefaultDialect):
         #cursor.execute(q)
         print(dir(cursor))
         print(type(cursor))
-        print(cursor)
+        print("Time to iter")
+        for c in cursor:
+            print(c)
+            print(type(c))
         for info in cursor.description:
             print( "ROW INFO!!")
             print( info )
