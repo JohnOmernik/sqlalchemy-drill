@@ -123,7 +123,6 @@ class Cursor(common.DBAPICursor):
         """
         self._myconn = conn
 
-        print("Type of myconn:" + str(type(self._myconn)))
         print("In cursor init")
         super(Cursor, self).__init__(poll_interval)
 #        # Config
@@ -264,7 +263,7 @@ class Cursor(common.DBAPICursor):
         print("********* IAM at execute*****")
   #      print(self._connectargs)
    #     drill = PyDrill(self._connectargs)
-        self._data = self._myconn.execute(operation)
+        self._data = self._myconn.query(operation)
         self._actual_cols = self._extract_fields( self._operation )
         self._columns = self._data.columns
 
@@ -516,7 +515,7 @@ class Cursor(common.DBAPICursor):
         typeQuery = sqlparse.format(typeQuery, reindent=True, keyword_case='upper')
 
         #drill = PyDrill(host=self._host, port=self._port)
-        fieldQueryResult = self._myconn.execute(typeQuery).to_dataframe()
+        fieldQueryResult = self._myconn.query(typeQuery).to_dataframe()
         tempTypes = fieldQueryResult.T.to_dict()[0]
 
         for column in columns:
