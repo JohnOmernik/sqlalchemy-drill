@@ -38,7 +38,7 @@ class Connection(object):
 
         print("In Conn init:")
         print(self._kwargs)
-        self._conn = PyDrill(kwargs)
+        self._conn = PyDrill(**kwargs)
         print(self._conn.is_active())
         print(self._conn.query("show schemas"))
 
