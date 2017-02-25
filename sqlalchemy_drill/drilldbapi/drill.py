@@ -37,7 +37,9 @@ class Connection(object):
         self._args = args
 
         print("In Conn init:")
+        print(self._kwargs)
         self._conn = PyDrill(self._kwargs)
+        print(self._conn.query("show schemas"))
 
     def close(self):
         """Closes active connection to Drill.  """
