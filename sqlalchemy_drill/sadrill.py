@@ -193,7 +193,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
         else:
             table_name = self.storage_plugin + ".`" + table_name + "`"
 
-        q = "SELECT * FROM %(table_id)s LIMIT 0" % ({"table_id": table_name})
+        q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})
 
         print("in get columns!!!!!")
  #       concurs = connection.cursor()
