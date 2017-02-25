@@ -59,8 +59,8 @@ class Connection(object):
 
     def cursor(self):
         """Return a new :py:class:`Cursor` object using the connection."""
-        print ("curs: " + self._kwargs)
-        print ("con: " + str(self._conn)) 
+        print ("curs: " + str(self._kwargs))
+        print (str(type(self._conn))
         return Cursor(self._conn, **self._kwargs)
 
 
