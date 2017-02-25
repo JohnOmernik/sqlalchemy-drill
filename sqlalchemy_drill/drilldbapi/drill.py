@@ -542,7 +542,7 @@ class Cursor(common.DBAPICursor):
         print("In get storage plugins")
         print(self._myconn)
         #drill = PyDrill(host=self._host, port=self._port)
-        plugins = self._myconn.execute("SHOW DATABASES").to_dataframe().to_dict()
+        plugins = self._myconn.query("SHOW DATABASES").to_dataframe().to_dict()
         return plugins['SCHEMA_NAME']
 
     def _get_type_code(self, type):
