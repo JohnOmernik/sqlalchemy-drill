@@ -206,6 +206,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
         #cursor.execute(q)
         print(dir(cursor))
         print(type(cursor))
+        print(cursor)
         for info in cursor.description:
             print( "ROW INFO!!")
             print( info )
