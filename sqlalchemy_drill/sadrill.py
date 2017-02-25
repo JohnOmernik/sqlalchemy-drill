@@ -188,56 +188,56 @@ class DrillDialect_sadrill(default.DefaultDialect):
         except exc.NoSuchTableError:
             return False
 
-    def get_columns(self, connection, table_name, schema=None, **kw):
-        if len(self.workspace) > 0:
-            table_name = self.storage_plugin + "." + self.workspace + ".`" + table_name + "`"
-        else:
-            table_name = self.storage_plugin + ".`" + table_name + "`"
+#    def get_columns(self, connection, table_name, schema=None, **kw):
+#        if len(self.workspace) > 0:
+##            table_name = self.storage_plugin + "." + self.workspace + ".`" + table_name + "`"
+#        else:
+#            table_name = self.storage_plugin + ".`" + table_name + "`"
 
 #        q = "DESCRIBE %(table_id)s" % ({"table_id": table_name})
-        q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})
+#        q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})
 
-        print("in get columns!!!!!")
+#        print("in get columns!!!!!")
  #       concurs = connection.cursor()
 
-        cursor = connection.execute(q)
+ #       cursor = connection.execute(q)
         
 
-        result = []
+  #      result = []
         #db = drill.connect(host=self.host, port=self.port)
  #       cursor = connection.cursor()
 #        cursor = db.cursor()
         #cursor.execute(q)
 
 #        for info in cursor.description:
-        for info in cursor:
-            print( "ROW INFO!!")
-            print( info )
-            print(info.keys)
-            print(info.items)
-            print(info.values)
+   #     for info in cursor:
+    #        print( "ROW INFO!!")
+     #       print( info )
+      #      print(info.keys)
+       #     print(info.items)
+        #    print(info.values)
 
 
-            cname = info[0]
-            bisnull = True
-            ctype = info[1]
-            try:
-                coltype = _type_map[ctype]
-            except KeyError:
-                #If the type is unknown, make it a VARCHAR
-                coltype = types.VARCHAR
+       #     cname = info[0]
+       #     bisnull = True
+       #     ctype = info[1]
+       #     try:
+       #         coltype = _type_map[ctype]
+       #     except KeyError:
+       #         #If the type is unknown, make it a VARCHAR
+       #         coltype = types.VARCHAR
 
-            column = {
-                "name": cname,
-                "type": coltype,
-                "default": None,
-                "autoincrement": None,
-                "nullable": bisnull,
-            }
-            print( column )
-            result.append(column)
-        print(result)
-        return result
+#            column = {
+#                "name": cname,
+ #               "type": coltype,
+  #              "default": None,
+  #              "autoincrement": None,
+  #              "nullable": bisnull,
+  #          }
+  #          print( column )
+  #          result.append(column)
+  #      print(result)
+  #      return result
 
 
     def get_table_names(self, connection, schema=None, **kw):
