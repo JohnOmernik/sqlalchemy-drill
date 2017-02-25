@@ -55,7 +55,8 @@ _type_map = {
     'smallint': types.SMALLINT,
     'timestamp': types.TIMESTAMP,
     'time': types.TIME,
-    'varchar': types.String
+    'varchar': types.String,
+    'CHARACTER VARYING': types.String
 }
 
 
@@ -210,24 +211,32 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
 #        for info in cursor.description:
         for info in cursor:
+
+            cname = info['COLUMN_NAME']
+            cisnull = info['IS_NULLABLE']
+            if cisnull == "YES":
+                bisnull = True
+            else:
+                bisnull = False
+            ctype = info['DATA_TYPE']
             print( "ROW INFO!!")
             print( info )
             try:
-                coltype = _type_map[info[1]]
+                coltype = _type_map[ctype]
             except KeyError:
                 #If the type is unknown, make it a VARCHAR
                 coltype = types.VARCHAR
 
             column = {
-                "name": info[0],
+                "name": cname,
                 "type": coltype,
                 "default": None,
                 "autoincrement": None,
-                "nullable": True,
+                "nullable": bisnull,
             }
             print( column )
             result.append(column)
-
+        print(result)
         return result
 
 
