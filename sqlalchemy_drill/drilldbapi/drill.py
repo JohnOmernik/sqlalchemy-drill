@@ -125,6 +125,8 @@ class Cursor(common.DBAPICursor):
         :param source: string -- arbitrary identifier (shows up in the Presto monitoring page)
         """
         self._myconn = conn
+
+        print("Type of myconn:" + str(type(self._myconn)))
         print("In cursor init")
         super(Cursor, self).__init__(poll_interval)
 #        # Config
@@ -537,6 +539,8 @@ class Cursor(common.DBAPICursor):
         :param self:
         :return: List of enabled storage plugins
         """
+        print("In get storage plugins")
+        print(self._myconn)
         #drill = PyDrill(host=self._host, port=self._port)
         plugins = self._myconn.execute("SHOW DATABASES").to_dataframe().to_dict()
         return plugins['SCHEMA_NAME']
