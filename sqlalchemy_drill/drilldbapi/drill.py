@@ -35,9 +35,6 @@ class Connection(object):
     def __init__(self, *args, **kwargs):
         self._kwargs = kwargs
         self._args = args
-
-        print("In Conn init:")
-        print(self._kwargs)
         self._conn = PyDrill(**kwargs)
 
     def close(self):
@@ -46,7 +43,7 @@ class Connection(object):
 
     def execute(self, q):
         """ Executes a query!"""
-        print("in Connection.execute")
+        print("######### in Connection.execute")
         return self._conn.query(q)
 
 
@@ -60,8 +57,6 @@ class Connection(object):
 
     def cursor(self):
         """Return a new :py:class:`Cursor` object using the connection."""
-        print ("curs: " + str(self._kwargs))
-        print (str(type(self._conn)))
         return Cursor(self._conn, **self._kwargs)
 
 
@@ -121,9 +116,10 @@ class Cursor(common.DBAPICursor):
             update, defaults to a second
         :param source: string -- arbitrary identifier (shows up in the Presto monitoring page)
         """
+        print("Start cursor init")
+
         self._myconn = conn
 
-        print("In cursor init")
         super(Cursor, self).__init__(poll_interval)
 #        # Config
 #        self._host = kwargs['host']
@@ -152,7 +148,7 @@ class Cursor(common.DBAPICursor):
         #    self._connectargs["verify_certs"] = verify_certs
         #if ca_certs in kwargs:
         #    self._connectargs["ca_certs"] = ca_certs
-        print("****** I done at init")
+        print("****** Finish Cursor init")
  #       print(self._connectargs)
 
     def get_schema(self):
@@ -169,7 +165,7 @@ class Cursor(common.DBAPICursor):
 
     def _fetch_more(self):
         pass
-    
+
     @property
     def description(self):
         """This read-only attribute is a sequence of 7-item sequences.
@@ -223,14 +219,12 @@ class Cursor(common.DBAPICursor):
         Return values are not defined.
         """
 
-        print("In cursor.execute")
+        print("Start cursor.execute")
 
         self._reset_state()
         self._state = self._STATE_RUNNING
 
-        print("In parsing execute")
         #Clear out newlines in the query:
-        print(operation)
         operation = operation.replace( '\n',' ')
 
         #This bit of hackery is needed for SQLAlchemy and Superset
@@ -260,12 +254,12 @@ class Cursor(common.DBAPICursor):
         operation = operation.replace( '"', '`')
         self._operation = operation
 
-        print("********* IAM at execute*****")
   #      print(self._connectargs)
    #     drill = PyDrill(self._connectargs)
         self._data = self._myconn.query(operation)
         self._actual_cols = self._extract_fields( self._operation )
         self._columns = self._data.columns
+        print("Finish cursor execute")
 
         
     def fetchone(self):

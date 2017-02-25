@@ -141,15 +141,12 @@ class DrillDialect_sadrill(default.DefaultDialect):
         else:
             drill_auth = ""
 
-        print("#####FDSDAS")
-        print(kwargs)
         qargs = {
             'host': url.host,
             'port': url.port or 8048,
             'drill_auth':  drill_auth,
  #           'username': url.username,
         }
-
 
         qargs.update(url.query)
 
@@ -199,12 +196,12 @@ class DrillDialect_sadrill(default.DefaultDialect):
         q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})
 
         print("in get columns!!!!!")
-        columns = connection.execute(q)
+        cursor = connection.cursor.execute(q)
         result = []
         #db = drill.connect(host=self.host, port=self.port)
-        cursor = connection.cursor()
+ #       cursor = connection.cursor()
 #        cursor = db.cursor()
-        cursor.execute(q)
+        #cursor.execute(q)
         for info in cursor.description:
             print( "ROW INFO!!")
             print( info )
