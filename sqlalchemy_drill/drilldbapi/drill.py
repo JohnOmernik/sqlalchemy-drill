@@ -37,12 +37,6 @@ class Connection(object):
         self._args = args
 
         print("In Conn init:")
-        print("kwargs")
-
-        print(kwargs)
-        print("args")
-        print(args)
-    
         self._conn = PyDrill(self._kwargs)
 
     def close(self):
@@ -65,6 +59,8 @@ class Connection(object):
 
     def cursor(self):
         """Return a new :py:class:`Cursor` object using the connection."""
+        print ("curs: " + self._kwargs)
+        print ("con: " + str(self._conn)) 
         return Cursor(self._conn, **self._kwargs)
 
 
