@@ -35,7 +35,7 @@ class Connection(object):
     def __init__(self, *args, **kwargs):
         self._kwargs = kwargs
         self._args = args
-        self.drill = PyDrill(**kwargs)
+        self._conn = PyDrill(**kwargs)
 
     def close(self):
         """Closes active connection to Drill.  """
@@ -44,7 +44,7 @@ class Connection(object):
     def execute(self, q):
         """ Executes a query!"""
         print("######### in Connection.execute")
-        return self.drill.query(q)
+        return cursor(q)
 #        return self._conn.quer(q)
 
 
@@ -58,7 +58,7 @@ class Connection(object):
 
     def cursor(self, q):
         """Return a new :py:class:`Cursor` object using the connection."""
-        return Cursor(self.drill, **self._kwargs)
+        return Cursor(self._conn, **self._kwargs)
 
 
 class Cursor(common.DBAPICursor):
@@ -119,7 +119,7 @@ class Cursor(common.DBAPICursor):
         """
         print("Start cursor init")
 
-        self.drill = conn
+        self._myconn = conn
 
         super(Cursor, self).__init__(poll_interval)
 #        # Config
@@ -135,7 +135,7 @@ class Cursor(common.DBAPICursor):
  #       self._description = None
         self._columns = OrderedDict()
         self._actual_cols = None
- #       self.w_connectargs = {"host":host, "port": port}
+ #       self._connectargs = {"host":host, "port": port}
 
         print("****** Finish Cursor init")
 
@@ -244,7 +244,7 @@ class Cursor(common.DBAPICursor):
 
   #      print(self._connectargs)
    #     drill = PyDrill(self._connectargs)
-        self._data = self.mydrill.query(operation)
+        self._data = self._myconn.query(operation)
         self._actual_cols = self._extract_fields( self._operation )
         self._columns = self._data.columns
         print("Finish cursor execute")
@@ -497,7 +497,7 @@ class Cursor(common.DBAPICursor):
         typeQuery = sqlparse.format(typeQuery, reindent=True, keyword_case='upper')
 
         #drill = PyDrill(host=self._host, port=self._port)
-        fieldQueryResult = self.drill.query(typeQuery).to_dataframe()
+        fieldQueryResult = self._myconn.query(typeQuery).to_dataframe()
         tempTypes = fieldQueryResult.T.to_dict()[0]
 
         for column in columns:
@@ -513,7 +513,7 @@ class Cursor(common.DBAPICursor):
         :return: List of enabled storage plugins
         """
         #drill = PyDrill(host=self._host, port=self._port)
-        plugins = self.drill.query("SHOW DATABASES").to_dataframe().to_dict()
+        plugins = self._myconn.query("SHOW DATABASES").to_dataframe().to_dict()
         return plugins['SCHEMA_NAME']
 
     def _get_type_code(self, type):
