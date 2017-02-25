@@ -122,9 +122,6 @@ class Cursor(common.DBAPICursor):
 
         super(Cursor, self).__init__(poll_interval)
 #        # Config
-#        self._host = kwargs['host']
-#        self._port = kwargs['port']
-#        #self._username = username or getpass.getuser()
 #        self._catalog = catalog
 #        self._schema = schema
 #        self._arraysize = 1
@@ -138,11 +135,8 @@ class Cursor(common.DBAPICursor):
         self._columns = OrderedDict()
         self._actual_cols = None
  #       self._connectargs = {"host":host, "port": port}
-        #self.paramstyle = "pyformat"
 
-        #    self._connectargs["ca_certs"] = ca_certs
         print("****** Finish Cursor init")
- #       print(self._connectargs)
 
     def get_schema(self):
         return self._schema
