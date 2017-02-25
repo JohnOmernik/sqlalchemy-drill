@@ -213,8 +213,9 @@ class DrillDialect_sadrill(default.DefaultDialect):
         for info in cursor:
             print( "ROW INFO!!")
             print( info )
-            print(dir(info))
-            print(type(info))
+            print(info.keys)
+            print(info.items)
+            print(info.values)
 
 
             cname = info[0]
