@@ -204,13 +204,9 @@ class DrillDialect_sadrill(default.DefaultDialect):
  #       cursor = connection.cursor()
 #        cursor = db.cursor()
         #cursor.execute(q)
-        print(dir(cursor))
-        print(type(cursor))
-        print("Time to iter")
-        for c in cursor:
-            print(c)
-            print(type(c))
-        for info in cursor.description:
+
+#        for info in cursor.description:
+        for info in cursor:
             print( "ROW INFO!!")
             print( info )
             try:
