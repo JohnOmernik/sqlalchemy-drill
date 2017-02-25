@@ -128,7 +128,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
 #        return self.dbapi.PyDrill(autocommit=True, *cargs, **cparams)
 
     def create_connect_args(self, url, **kwargs):
-
+        print("In create connect args")
         db_parts = (url.database or 'drill').split('/')
 
         if url.username:
@@ -168,7 +168,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         else:
             raise ValueError("Unexpected database format {}".format(url.database))
-
+        print(qargs)
         return ([], qargs)
 
     def get_schema_names(self, connection, **kw):
