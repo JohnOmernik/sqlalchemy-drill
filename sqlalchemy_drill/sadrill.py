@@ -211,16 +211,12 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
 #        for info in cursor.description:
         for info in cursor:
-
-            cname = info['COLUMN_NAME']
-            cisnull = info['IS_NULLABLE']
-            if cisnull == "YES":
-                bisnull = True
-            else:
-                bisnull = False
-            ctype = info['DATA_TYPE']
             print( "ROW INFO!!")
             print( info )
+
+            cname = info[0]
+            bisnull = True
+            ctype = info[1]
             try:
                 coltype = _type_map[ctype]
             except KeyError:
