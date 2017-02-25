@@ -201,8 +201,9 @@ class DrillDialect_sadrill(default.DefaultDialect):
         print("in get columns!!!!!")
         columns = connection.execute(q)
         result = []
-        db = drill.connect(host=self.host, port=self.port)
-        cursor = db.cursor()
+        #db = drill.connect(host=self.host, port=self.port)
+        cursor = connection.cursor()
+#        cursor = db.cursor()
         cursor.execute(q)
         for info in cursor.description:
             print( "ROW INFO!!")
