@@ -182,7 +182,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
             ctype = _type_map[col[1]]
             column = {
                 "name": cname,
-                "type": str(ctype),
+                "type": ctype,
                 "default": None,
                 "autoincrement": None,
                 "nullable": bisnull,
