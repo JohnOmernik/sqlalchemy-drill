@@ -75,19 +75,21 @@ def substitute_in_query(string_query, parameters):
             query = query.replace("?", str(param), 1)
     return query
 
-def submit_query(query, host, db, port, session):
+def submit_query(query, host, db, port, proto, session):
     local_payload_db = _PAYLOAD.copy()
     local_payload = _PAYLOAD.copy()
-    local_payload_db["query"] = "USE {}".format(db)
-    local_payload["query"] = query
-    session.post("http://"
+    if db != None:
+        local_payload_db["query"] = "USE {}".format(db)
+        session.post(proto
                  + host
                  + ":"
                  + str(port)
                  + "/query.json",
                  data = dumps(local_payload_db),
                  headers = _HEADER)
-    return session.post("http://"
+
+    local_payload["query"] = query
+    return session.post(proto
                         + host
                         + ":"
                         + str(port)
@@ -121,12 +123,13 @@ def parse_column_types(df):
 
 # Python DB API 2.0 classes
 class Cursor(object):
-    def __init__(self, host, db, port, session, conn):
+    def __init__(self, host, db, port, proto, session, conn):
         self.arraysize = 1
         self.db = db
         self.description = None
         self.host = host
         self.port = port
+        self.proto = proto
         self._session = session
         self._connected = True
         self.connection = conn
@@ -154,6 +157,7 @@ class Cursor(object):
                               self.host,
                               self.db,
                               self.port,
+                              self.proto,
                               self._session)
             
         if result.status_code != 200:
@@ -245,7 +249,7 @@ class Connection(object):
 
     @connected
     def cursor(self):
-        return Cursor(self.host, self.db, self.port, self._session, self)
+        return Cursor(self.host, self.db, self.port, self.proto, self._session, self)
 
 def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=None, verify_ssl=False, ca_certs=None):
     session = Session()
