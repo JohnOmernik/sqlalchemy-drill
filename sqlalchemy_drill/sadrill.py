@@ -175,11 +175,16 @@ class DrillDialect_sadrill(default.DefaultDialect):
         print("Description")
         print("###########")
         desc = cursor.cursor.getdesc()
+        
         print("WHAT IS THIS DESC")
         print(desc)
         print(type(desc))
         print(dir(desc))
-        print("Count:" + str(desc.count()))
+
+
+        print(cursor)
+        print(dir(cursor))
+        print(type(cursor))
 
         desc = cursor.getdesc()
 
