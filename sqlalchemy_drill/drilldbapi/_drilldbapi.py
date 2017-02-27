@@ -212,12 +212,11 @@ class Cursor(object):
             
             remaining = self._resultSet[next(self._resultSetStatus):]
             self._resultSetStatus = iter(tuple())
-            for x in remaining:
-                print(x)
+            all = [tuple(x) for x in remaining.to_records(index=False)]
     
-            print(remaining)
-            print(type(remaining))
-            return remaining
+            print(all)
+            print(type(all))
+            return all
         except StopIteration:
             return None
            # return Series([])
