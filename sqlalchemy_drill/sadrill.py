@@ -252,8 +252,8 @@ class DrillDialect_sadrill(default.DefaultDialect):
         print("get_table_names")
         print(type(connection))
         print(dir(connection))
-        print(type(self))
-        print(dir(self))
+        print(type(self.connection))
+        print(dir(self.connection))
         curs = connection.cursor()
 
         file_dict = curs.execute("SHOW FILES")
