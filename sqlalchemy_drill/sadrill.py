@@ -79,10 +79,10 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
         if asfrom:
             if table.schema != "":
                 fixed_schema = ".".join(["`" + i.replace('`', '') + "`" for i in table.schema.split(".")])
-                fixed_table = fixed_schema + "." + self.preparer.quote(table.name, '`')
+                fixed_table = fixed_schema + ".`" + table.name.replace("`", "") + "`"
                 print(fixed_table)
             else:
-                fixed_table = self.preparer.quote(table.name, '`')
+                fixed_table = "`" + table.name.replace("`", "") + "`"
             return fixed_table
         else:
             return ""
