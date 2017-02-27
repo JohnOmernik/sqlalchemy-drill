@@ -75,6 +75,12 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
         print("########Visit Table")
         print(table.name)
         print(table.schema)
+
+        if table.schema != "":
+            fixed_schema = ".".join(["`" + i + "`" for i in table.schema.split(".")])
+            print fixed_schema
+           
+
         print(dir(table))
         print(self.preparer.quote(table.name, '`'))
         print(self.statement)
