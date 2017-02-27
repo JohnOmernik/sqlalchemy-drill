@@ -147,15 +147,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         return ([], qargs)
 
-    def get_schema_names(self, connection, **kw):
-        curs = connection.execute("SHOW SCHEMAS")
-        result = []
-
-        for r in curs:
-            if row.SCHEMA_NAME != "cp.default" and row.SCHEMA_NAME != "INFORMATION_SCHEMA":
-                result.append(row.SCHEMA_NAME)
-        return tuple(result)
-#        return [row.SCHEMA_NAME for row in connection.execute('SHOW SCHEMAS')]
 
     def get_selected_workspace(self):
         return self.workspace
@@ -222,22 +213,35 @@ class DrillDialect_sadrill(default.DefaultDialect):
         curs = connection.execute("SHOW FILES")
         temp = []
         for row in curs:
-            if row.isDirectory == "true":
-                temp.append(row.name)
+            if row.name.find(".view.drill") >= 0:
+                myname = row.name.replace(".view.drill", "")
+            else:
+                myname = row.name
+            temp.append(myname)
         table_names = tuple(temp)
         return table_names
 
-    def get_view_names(self, connection, schema=None, **kw):
-        curs = connection.execute("SHOW FILES")
-        temp = []
+    def get_schema_names(self, connection, **kw):
+        curs = connection.execute("SHOW SCHEMAS")
+        result = []
+
         for row in curs:
-            print(row.name)
-            print(row.isFile)
-            if row.name.find(".view.drill") >= 0 and row.isFile == "true":
-                myname = row.name.replace(".view.drill", "")
-                temp.append(myname)
-        view_names = tuple(temp)
-        return view_names
+            if row.SCHEMA_NAME != "cp.default" and row.SCHEMA_NAME != "INFORMATION_SCHEMA":
+                result.append(row.SCHEMA_NAME)
+        return tuple(result)
+#        return [row.SCHEMA_NAME for row in connection.execute('SHOW SCHEMAS')]
+    def get_view_names(self, connection, schema=None, **kw):
+        return []
+ #       curs = connection.execute("SHOW FILES")
+ #       temp = []
+ #       for row in curs:
+ #           print(row.name)
+ #           print(row.isFile)
+ #           if row.name.find(".view.drill") >= 0 and row.isFile == "true":
+ #               myname = row.name.replace(".view.drill", "")
+ #               temp.append(myname)
+ #       view_names = tuple(temp)
+ #       return view_names
 
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
         """Drill has no support for foreign keys.  Returns an empty list."""
