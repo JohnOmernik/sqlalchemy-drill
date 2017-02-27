@@ -268,7 +268,7 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
     else:
         proto = "https://"
 
-
+    print local_payload
     response = session.post(proto + host + ":" + str(port) + local_url,
                              data = dumps(local_payload),
                              headers = _HEADER)
