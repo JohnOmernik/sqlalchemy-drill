@@ -55,6 +55,15 @@ class ConnectionClosedException(Error):
         self.message = message
     def __str__(self):
         return repr(self.message)
+# Object types
+class STRING(type):
+    pass
+
+class NUMBER(type):
+    pass
+
+class DATETIME(type):
+    pass
 
 # Helper functions
 def substitute_in_query(string_query, parameters):
@@ -167,7 +176,7 @@ class Cursor(object):
     @connected
     def fetchone(self):
         try:
-            return self._resultSet.ix[next(self._resultSetStatus)]
+            return tuple(self._resultSet.ix[next(self._resultSetStatus)]) # Added Tuple
         except StopIteration:
             return None  # We need to put None rather than Series([]) because SQLAlchemy processes that a row with no columns which it doesn't like
 #            return Series([])
