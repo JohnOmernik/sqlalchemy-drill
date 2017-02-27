@@ -71,11 +71,24 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
         return 'length{}'.format(self.function_argspec(fn, **kw))
 
     def visit_table(self, table, asfrom=False, **kwargs):
-        if asfrom:
-            storage_plugin = self.dialect.storage_plugin
-            workspace = self.dialect.workspace
 
-            full_table = storage_plugin + "." + workspace + "."
+        print("########Visit Table")
+        print(table)
+        print(asfrom)
+        print(kwargs)
+        
+        print(self)
+        print(dir(self))
+        print(type(self))
+
+        if asfrom:
+#            storage_plugin = self.dialect.storage_plugin
+#            workspace = self.dialect.workspace
+
+            
+
+#            full_table = storage_plugin + "." + workspace + "."
+            full_table = "dasdsadas"
             if not table.name.startswith( full_table ):
                 corrected_table = full_table + self.preparer.quote(table.name, '`')
                 print( "Fixed table: " + corrected_table)
