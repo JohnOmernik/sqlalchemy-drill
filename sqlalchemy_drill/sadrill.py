@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Created on Thu Dec  1 08:58:12 2016
@@ -19,8 +20,6 @@ from sqlalchemy.sql import compiler
 import re
 import sqlalchemy
 
-
-
 try:
     from sqlalchemy.sql.compiler import SQLCompiler
 except ImportError:
@@ -35,8 +34,6 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
     def __init__(self, dialect):
         super(DrillIdentifierPreparer, self). \
             __init__(dialect, initial_quote='`', final_quote='`')
-
-
 
 try:
     from sqlalchemy.types import BigInteger
@@ -113,16 +110,13 @@ class DrillDialect_sadrill(default.DefaultDialect):
     @classmethod
 
     def dbapi(cls):
+        print("######## In dbai")
         import sqlalchemy_drill.drilldbapi.drill as module
         return module
 
     def connect(self, *cargs, **cparams):
-        print("insadrill connect")
+        print("########### insadrill connect")
         return self.dbapi.Connection(autocommit=True, *cargs, **cparams)
-
-    def do_execute(self, cursor, statement, parameters):
-        print("In do_execute")
-        return cursor.execute(statement)
 
 
 #    def dbapi(cls):
@@ -201,12 +195,12 @@ class DrillDialect_sadrill(default.DefaultDialect):
             table_name = self.storage_plugin + ".`" + table_name + "`"
 
 #        q = "DESCRIBE %(table_id)s" % ({"table_id": table_name})
-        q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})
-
-        print("in get columns!!!!!")
+ #       q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})
+#
+ #       print("in get columns!!!!!")
  #       concurs = connection.cursor()
 
-        cursor = connection.execute(q)
+        cursor = connection.cursor(q)
         
 
         result = []

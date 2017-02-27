@@ -24,6 +24,11 @@ setup(name='sqlalchemy_drill',
       'Programming Language :: Python :: Implementation :: CPython',
       'Topic :: Database :: Front-Ends',
       ],
+      install_requires=[
+        "requests",
+        "numpy",
+        "pandas"
+      ],
       keywords='SQLAlchemy Apache Drill',
       author='John Omernik, Charles Givre',
       author_email='john@omernik.com, cgivre@thedataist.com',
