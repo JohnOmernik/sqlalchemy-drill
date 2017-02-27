@@ -253,7 +253,8 @@ class DrillDialect_sadrill(default.DefaultDialect):
 #        print (kw)
 
  #       drill = PyDrill(host=self.host, port=self.port)
-        file_dict = connection.execute("SHOW FILES IN " + location)
+        #file_dict = connection.execute("SHOW FILES IN " + location)
+        file_dict = connection.execute("SHOW FILES")
 
         temp = []
         for row in file_dict:
