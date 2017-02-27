@@ -78,7 +78,7 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
 
         if table.schema != "":
             fixed_schema = ".".join(["`" + i + "`" for i in table.schema.split(".")])
-            print fixed_schema
+            print(fixed_schema)
            
 
         print(dir(table))
