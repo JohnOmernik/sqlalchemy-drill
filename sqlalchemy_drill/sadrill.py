@@ -41,6 +41,7 @@ except ImportError:
 
 _type_map = {
     'bigint': types.BIGINT,
+    'BIGINT': types.BIGINT,
     'binary': types.LargeBinary,
     'boolean': types.BOOLEAN,
     'date': types.DATE,
