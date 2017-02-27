@@ -106,6 +106,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
     description_encoding = None
     supports_native_boolean = True
     storage_plugin = ""
+
     workspace = ""
 
     @classmethod
