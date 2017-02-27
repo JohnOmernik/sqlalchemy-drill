@@ -202,15 +202,12 @@ class Cursor(object):
 
     @connected
     def fetchall(self):
-        print("#########")
-        print("In Fetch all")
+        # We can't just return a dataframe to sqlalchemy, it has to be a list of tuples... 
         try:
             remaining = self._resultSet[next(self._resultSetStatus):]
             self._resultSetStatus = iter(tuple())
             all = [tuple(x) for x in remaining.to_records(index=False)]
     
-            print(all)
-            print(type(all))
             return all
         except StopIteration:
             return None
