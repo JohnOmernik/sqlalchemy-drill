@@ -171,7 +171,10 @@ class DrillDialect_sadrill(default.DefaultDialect):
         print("in get columns!!!!!")
 #        q = "DESCRIBE %(table_id)s" % ({"table_id": table_name})
         cursor = connection.execute(q)
-        
+
+        print("Description")
+        print(type(cursor.description))
+        print(cursor.description)
         result = []
         for info in cursor:
             print(type(info))
