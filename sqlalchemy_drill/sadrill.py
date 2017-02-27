@@ -250,12 +250,15 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         temp = []
         for row in curs:
-            print(row.name)
-            temp.append(row.name)
+            try:
+                print(row.name)
+                temp.append(row.name)
+            except:
+                print(row)
         print(temp)
 
         table_names = tuple(temp)
-
+        print("Done with get_table_names")
         return table_names
 
     def get_view_names(self, connection, schema=None, **kw):
