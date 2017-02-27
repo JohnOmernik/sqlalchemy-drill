@@ -51,6 +51,7 @@ _type_map = {
     'interval': types.Interval,
     'smallint': types.SMALLINT,
     'timestamp': types.TIMESTAMP,
+    'TIMESTAMP': types.TIMESTAMP,
     'time': types.TIME,
     'varchar': types.String,
     'CHARACTER VARYING': types.String
@@ -165,14 +166,15 @@ class DrillDialect_sadrill(default.DefaultDialect):
         except exc.NoSuchTableError:
             return False
 
-    def get_columns(self, connection, table_name, schema=None, **kw):
+    def LIMIT1_get_columns(self, connection, table_name, schema=None, **kw):
+        # This method stinks at getting columns from a speed perspective, because it's slow (it has to process a query)
+        # However, it's accurate, because it takes a look at the data, and provides a good representation of the types it saw. (for 1 record, not idea...)
+
         q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})#
 
-        print("in get columns!!!!!")
 #        q = "DESCRIBE %(table_id)s" % ({"table_id": table_name})
         cursor = connection.execute(q)
 
-        print("Description")
 
         desc = cursor.cursor.getdesc()
         result = []
@@ -188,37 +190,28 @@ class DrillDialect_sadrill(default.DefaultDialect):
                 "nullable": bisnull,
             }
             result.append(column)
-        print("")
-        print("#############")
-        print(result)
         return(result)
-#        print(desc)
 
-#        for info in cursor:
-#            print(type(info))
-#            print(info)
+    def get_columns(self, connection, table_name, schema=None, **kw):
 
- #           cname = info[0]
- #           bisnull = True
- #           ctype = info[1]
- #           try:
- #               coltype = _type_map[ctype]
- #               print("Found Map: " + ctype)
- #           except KeyError:
- #               #If the type is unknown, make it a VARCHAR
- #               coltype = types.VARCHAR
 
-#            column = {
-#                "name": cname,
-#                "type": coltype,
-#                "default": None,
-#                "autoincrement": None,
-#               "nullable": bisnull,
-#            }
-#            print( column )
-#            result.append(column)
-#        print(result)
-#        return result
+        q = "DESCRIBE %(table_id)s" % ({"table_id": table_name})
+        cursor = connection.execute(q)
+
+        result = []
+        for col in cursor:
+            cname = col[0]
+            ctype = _type_map[col[1]]
+            bisnull = True
+            column = {
+                "name": cname,
+                "type": ctype,
+                "default": None,
+                "autoincrement": None,
+                "nullable": bisnull,
+            }
+            result.append(column)
+        return(result)
 
 
     def get_table_names(self, connection, schema=None, **kw):
