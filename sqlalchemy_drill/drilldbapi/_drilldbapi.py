@@ -124,6 +124,7 @@ class Cursor(object):
         self.connection = conn
         self._resultSet = None
         self._resultSetStatus = None
+        self.rowcount = -1
 
     # Decorator for methods which require connection
     def connected(func):
@@ -154,6 +155,7 @@ class Cursor(object):
             self._resultSet = (DataFrame(result.json()["rows"],
                                         columns = result.json()["columns"])
                                .fillna(value=nan))
+            self.rowcount = len(self._resultSet)
             self._resultSetStatus = iter(range(len(self._resultSet)))
             column_names, column_types = parse_column_types(self._resultSet)
             self.description = tuple(
