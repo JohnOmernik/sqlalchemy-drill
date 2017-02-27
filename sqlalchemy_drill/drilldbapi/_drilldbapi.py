@@ -252,8 +252,7 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
     session = Session()
 
     if ca_certs != None:
-        session.cert = ca_certs
-    session.verify = verify_ssl
+        session.verify = ca_certs
 
     if drilluser == None:
         local_payload = _PAYLOAD.copy()
