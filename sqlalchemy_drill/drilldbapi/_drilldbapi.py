@@ -188,8 +188,6 @@ class Cursor(object):
             fetch_size = self.arraysize
         else:
             fetch_size = size
-        print("###########")
-        print(fetch_size)
         try:
             index = next(self._resultSetStatus)
             try:
@@ -204,6 +202,8 @@ class Cursor(object):
 
     @connected
     def fetchall(self):
+        print("#########")
+        print("In Fetch all")
         try:
             remaining = self._resultSet[next(self._resultSetStatus):]
             self._resultSetStatus = iter(tuple())
