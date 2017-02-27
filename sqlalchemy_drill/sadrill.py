@@ -150,7 +150,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
         return ([], qargs)
 
     def get_schema_names(self, connection, **kw):
-        return [row.SCHEMA_NAME for row in connection.execute('SHOW DATABASES')]
+        return [row.SCHEMA_NAME for row in connection.execute('SHOW SCHEMAS')]
 
     def get_selected_workspace(self):
         return self.workspace
@@ -166,10 +166,10 @@ class DrillDialect_sadrill(default.DefaultDialect):
             return False
 
     def get_columns(self, connection, table_name, schema=None, **kw):
- #       q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})#
+        q = "SELECT * FROM %(table_id)s LIMIT 0" % ({"table_id": table_name})#
 
         print("in get columns!!!!!")
-        q = "DESCRIBE %(table_id)s" % ({"table_id": table_name})
+#        q = "DESCRIBE %(table_id)s" % ({"table_id": table_name})
         cursor = connection.execute(q)
         
         result = []
