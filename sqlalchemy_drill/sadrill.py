@@ -132,7 +132,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
     def create_connect_args(self, url, **kwargs):
         print("In create connect args")
         db_parts = (url.database or 'drill').split('/')
-
+        db = ".".join(db_parts)
         if url.username:
             if url.password:
                 p = url.password
@@ -159,8 +159,8 @@ class DrillDialect_sadrill(default.DefaultDialect):
         self.port = url.port
         self.username = url.username
         self.password = url.password
-        qargs['db'] = db_parts
-        self.db = db_parts
+        qargs['db'] = db
+        self.db = db
 #        if len(db_parts) == 1:
 #            qargs['catalog'] = db_parts[0]
 #            self.storage_plugin = db_parts[0]
