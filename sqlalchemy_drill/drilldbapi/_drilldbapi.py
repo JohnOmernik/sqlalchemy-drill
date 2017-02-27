@@ -171,7 +171,7 @@ class Cursor(object):
 
     @connected
     def getdesc(self):
-        return self._resultSetStatus
+        return self.description
 
     @connected
     def fetchone(self):
