@@ -72,10 +72,6 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
 
     def visit_table(self, table, asfrom=False, **kwargs):
 
-        print("########Visit Table")
-        print(table.name)
-        print(table.schema)
-
         if asfrom:
             if table.schema != "":
                 fixed_schema = ".".join(["`" + i.replace('`', '') + "`" for i in table.schema.split(".")])
@@ -96,6 +92,7 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
 class DrillDialect_sadrill(default.DefaultDialect):
     name = 'drilldbapi'
     driver = 'rest'
+    echo = True
     preparer = DrillIdentifierPreparer
     statement_compiler = DrillCompiler_sadrill
     poolclass = pool.SingletonThreadPool

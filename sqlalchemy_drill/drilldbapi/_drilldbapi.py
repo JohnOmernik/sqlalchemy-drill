@@ -56,17 +56,6 @@ class ConnectionClosedException(Error):
     def __str__(self):
         return repr(self.message)
 
-# Object types
-class STRING(type):
-    pass
-
-class NUMBER(type):
-    pass
-
-class DATETIME(type):
-    pass
-
-
 # Helper functions
 def substitute_in_query(string_query, parameters):
     query = string_query
@@ -200,7 +189,8 @@ class Cursor(object):
                 pass
             return self._resultSet[index : index + fetch_size]
         except StopIteration:
-            return Series([])
+            return None
+            #return Series([])
 
     @connected
     def fetchall(self):
@@ -209,7 +199,8 @@ class Cursor(object):
             self._resultSetStatus = iter(tuple())
             return remaining
         except StopIteration:
-            return Series([])
+            return None
+           # return Series([])
 
     def __iter__(self):
         return self._resultSet.iterrows()
