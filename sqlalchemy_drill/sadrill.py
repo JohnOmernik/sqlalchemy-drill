@@ -54,7 +54,8 @@ _type_map = {
     'TIMESTAMP': types.TIMESTAMP,
     'time': types.TIME,
     'varchar': types.String,
-    'CHARACTER VARYING': types.String
+    'CHARACTER VARYING': types.String,
+    'ANY': types:String
 }
 
 
