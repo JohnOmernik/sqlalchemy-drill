@@ -170,8 +170,8 @@ class DrillDialect_sadrill(default.DefaultDialect):
 #            self.workspace = db_parts[1]
 
 
-        else:
-            raise ValueError("Unexpected database format {}".format(url.database))
+    #    else:
+    #        raise ValueError("Unexpected database format {}".format(url.database))
         print(qargs)
         return ([], qargs)
 
