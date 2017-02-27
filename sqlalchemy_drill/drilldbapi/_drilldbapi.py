@@ -200,8 +200,9 @@ class Cursor(object):
                     next(self._resultSetStatus)
             except StopIteration:
                 pass
+            myresults = self._resultSet[index : index + fetch_size]
 
-            return [tuple(x) for x in self._resultSet[index : index + fetch_size].to_records(index=False)]]
+            return [tuple(x) for x in myresults.to_records(index=False)]
             #return self._resultSet[index : index + fetch_size]
         except StopIteration:
             return None
