@@ -175,6 +175,7 @@ class Cursor(object):
 
     @connected
     def fetchone(self):
+        print("####### IN DBAPI fetchone")
         try:
             return self._resultSet.ix[next(self._resultSetStatus)] # Added Tuple
         except StopIteration:
@@ -183,6 +184,7 @@ class Cursor(object):
 
     @connected
     def fetchmany(self, size=None):
+        print("######## In DBAPI fetchmany")
         fetch_size = 1
         if size == None:
             fetch_size = self.arraysize
@@ -202,6 +204,7 @@ class Cursor(object):
 
     @connected
     def fetchall(self):
+        print("######### IN DBAPI fetchall")
         # We can't just return a dataframe to sqlalchemy, it has to be a list of tuples... 
         try:
             remaining = self._resultSet[next(self._resultSetStatus):]
