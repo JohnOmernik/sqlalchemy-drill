@@ -179,7 +179,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
         print(desc)
         print(type(desc))
         print(dir(desc))
-        print("Count:" + str(desc.count))
+        print("Count:" + str(desc.count()))
 
         desc = cursor.getdesc()
 
