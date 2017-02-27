@@ -182,12 +182,14 @@ class DrillDialect_sadrill(default.DefaultDialect):
             ctype = col[1]
             column = {
                 "name": cname,
-                "type": ctype,
+                "type": str(ctype),
                 "default": None,
                 "autoincrement": None,
                 "nullable": bisnull,
             }
             result.append(column)
+        print("")
+        print("#############")
         print(result)
         return(result)
 #        print(desc)
