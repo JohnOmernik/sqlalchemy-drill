@@ -153,7 +153,9 @@ class Cursor(object):
         else:
             self._resultSet = (DataFrame(result.json()["rows"],
                                         columns = result.json()["columns"])
-                               .fillna(value=nan))
+                               .fillna(value=nan).index.names = [None])
+
+#df.index.names = [None]
             self._resultSetStatus = iter(range(len(self._resultSet)))
             column_names, column_types = parse_column_types(self._resultSet)
             self.description = tuple(
