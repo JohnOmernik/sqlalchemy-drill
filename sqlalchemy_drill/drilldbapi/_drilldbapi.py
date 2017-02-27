@@ -207,6 +207,8 @@ class Cursor(object):
         try:
             remaining = self._resultSet[next(self._resultSetStatus):]
             self._resultSetStatus = iter(tuple())
+
+            print(remaining)
             print(type(remaining))
             return remaining
         except StopIteration:
