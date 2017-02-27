@@ -169,9 +169,6 @@ class Cursor(object):
             return self
 
 
-    @connected
-    def getdesc(self):
-        return self.description
 
     @connected
     def fetchone(self):
