@@ -173,7 +173,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
         cursor = connection.execute(q)
 
         print("Description")
-        print(cursor._metatdata)
+        print(cursor._metadata)
         print(type(cursor.cursor))
         print(cursor.cursor.description)
 
