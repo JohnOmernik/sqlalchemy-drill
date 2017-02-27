@@ -77,7 +77,7 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
         print(asfrom)
         print(kwargs)
         
-        print(self)
+#           print(self)
         print(dir(self))
         print(type(self))
 
