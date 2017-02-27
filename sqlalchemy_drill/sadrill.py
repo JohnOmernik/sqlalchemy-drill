@@ -260,8 +260,10 @@ class DrillDialect_sadrill(default.DefaultDialect):
         print(file_dict)
         temp = []
         for row in file_dict:
+            print(row)
+            
             temp.append(row['name'])
-
+        print(temp)
         table_names = tuple(temp)
 
         return table_names
