@@ -258,7 +258,6 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
         local_payload = _PAYLOAD.copy()
         local_url = "/query.json"
         local_payload["query"] = "show schemas"
-        
     else:
         local_payload = _LOGIN.copy()
         local_payload["j_username"] = drilluser
@@ -276,7 +275,7 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
                              headers = _HEADER)
     else:
         response = session.post(proto + host + ":" + str(port) + local_url,
-                             data = req_data)
+                             data = local_payload)
 
 
     if response.status_code != 200:
