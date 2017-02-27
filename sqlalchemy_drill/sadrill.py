@@ -179,7 +179,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
         for col in desc:
             cname = col[0]
             bisnull = True
-            ctype = col[1]
+            ctype = _type_map[col[1]]
             column = {
                 "name": cname,
                 "type": str(ctype),

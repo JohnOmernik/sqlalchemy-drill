@@ -13,6 +13,8 @@ _HEADER = {"Content-Type": "application/json"}
 _PAYLOAD = {"queryType":"SQL", "query": None}
 _LOGIN = {"j_username": None, "j_password": None}
 
+
+
 # Exceptions
 class Warning(Exception):
     pass
@@ -92,20 +94,20 @@ def parse_column_types(df):
     for column in df:
         try:
             df[column] = df[column].astype(int)
-            types.append(NUMBER)
+            types.append("bigint")
             names.append(column)
         except ValueError:
             try:
                 df[column] = df[column].astype(float)
-                types.append(NUMBER)
+                types.append("decimal")
                 names.append(column)
             except ValueError:
                 try:
                     df[column] = to_datetime(df[column])
-                    types.append(DATETIME)
+                    types.append("timestamp")
                     names.append(column)
                 except ValueError:
-                    types.append(STRING)
+                    types.append("varchar")
                     names.append(column)
     return (names, types)
                 
