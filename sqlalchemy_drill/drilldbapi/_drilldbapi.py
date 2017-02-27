@@ -144,7 +144,6 @@ class Cursor(object):
     def execute(self, operation, parameters=()):
         result = submit_query(substitute_in_query(operation, parameters),
                               self.host,
-                              self.db,
                               self.port,
                               self.proto,
                               self._session)
