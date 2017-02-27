@@ -154,10 +154,6 @@ class Cursor(object):
             self._resultSet = (DataFrame(result.json()["rows"],
                                         columns = result.json()["columns"])
                                .fillna(value=nan))
-            self._resultSet.index.names = None
-#..index.names=[None]
-
-#df.index.names = [None]
             self._resultSetStatus = iter(range(len(self._resultSet)))
             column_names, column_types = parse_column_types(self._resultSet)
             self.description = tuple(
@@ -209,7 +205,6 @@ class Cursor(object):
         print("#########")
         print("In Fetch all")
         try:
-            
             remaining = self._resultSet[next(self._resultSetStatus):]
             self._resultSetStatus = iter(tuple())
             all = [tuple(x) for x in remaining.to_records(index=False)]
