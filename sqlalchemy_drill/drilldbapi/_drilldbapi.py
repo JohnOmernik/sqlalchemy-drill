@@ -176,7 +176,7 @@ class Cursor(object):
     @connected
     def fetchone(self):
         try:
-            return tuple(self._resultSet.ix[next(self._resultSetStatus)]) # Added Tuple
+            return self._resultSet.ix[next(self._resultSetStatus)] # Added Tuple
         except StopIteration:
             return None  # We need to put None rather than Series([]) because SQLAlchemy processes that a row with no columns which it doesn't like
 #            return Series([])
@@ -188,7 +188,8 @@ class Cursor(object):
             fetch_size = self.arraysize
         else:
             fetch_size = size
-            
+        print("###########")
+        print(fetch_size)
         try:
             index = next(self._resultSetStatus)
             try:
