@@ -116,7 +116,8 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
     def connect(self, *cargs, **cparams):
         print("########### insadrill connect")
-        return self.dbapi.connect(autocommit=True, *cargs, **cparams)
+#        return self.dbapi.connect(autocommit=True, *cargs, **cparams)
+        return self.dbapi.connect(*cargs, **cparams)
 
 
 #    def dbapi(cls):
