@@ -190,6 +190,9 @@ class Cursor(object):
             fetch_size = self.arraysize
         else:
             fetch_size = size
+
+        print("fetch_size" + str(fetch_size))
+        results = []
         try:
             index = next(self._resultSetStatus)
             try:
@@ -197,7 +200,9 @@ class Cursor(object):
                     next(self._resultSetStatus)
             except StopIteration:
                 pass
-            return self._resultSet[index : index + fetch_size]
+
+            return [tuple(x) for x in self._resultSet[index : index + fetch_size].to_records(index=False)]]
+            #return self._resultSet[index : index + fetch_size]
         except StopIteration:
             return None
             #return Series([])
