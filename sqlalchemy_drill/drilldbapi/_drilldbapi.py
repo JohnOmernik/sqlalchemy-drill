@@ -258,22 +258,26 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
         local_payload = _PAYLOAD.copy()
         local_url = "/query.json"
         local_payload["query"] = "show schemas"
-        req_data=dumps(local_payload)
+        
     else:
         local_payload = _LOGIN.copy()
         local_payload["j_username"] = drilluser
         local_payload["j_password"] = drillpass
         local_url = "/j_security_check"
-        req_data=local_payload
     if use_ssl == False:
         proto = "http://"
     else:
         proto = "https://"
 
     print(local_payload)
-    response = session.post(proto + host + ":" + str(port) + local_url,
-                             data = req_data,
+    if drilluser == None:
+        response = session.post(proto + host + ":" + str(port) + local_url,
+                             data = dumps(local_payload),
                              headers = _HEADER)
+    else:
+        response = session.post(proto + host + ":" + str(port) + local_url,
+                             data = req_data)
+
 
     if response.status_code != 200:
         raise DatabaseError(str(response.json()["errorMessage"]),
