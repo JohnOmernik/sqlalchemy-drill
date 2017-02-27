@@ -45,6 +45,7 @@ _type_map = {
     'binary': types.LargeBinary,
     'boolean': types.BOOLEAN,
     'date': types.DATE,
+    'DATE': types.DATE,
     'decimal': types.DECIMAL,
     'double': types.FLOAT,
     'integer': types.INTEGER,
