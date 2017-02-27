@@ -11,7 +11,7 @@ threadsafety = 3
 paramstyle = 'qmark'
 _HEADER = {"Content-Type": "application/json"}
 _PAYLOAD = {"queryType":"SQL", "query": None}
-_LOGIN = {'j_username': None, 'j_password': None}
+_LOGIN = {"j_username": None, "j_password": None}
 
 # Exceptions
 class Warning(Exception):
