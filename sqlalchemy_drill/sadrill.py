@@ -173,13 +173,12 @@ class DrillDialect_sadrill(default.DefaultDialect):
         cursor = connection.execute(q)
 
         print("Description")
-
+        print("###########")
         desc = cursor.cursor.getdesc()
-        for x in desc:
-            print("wee")
-            print(type(x))
-            print(x)
-            print(dir(x))
+        print("WHAT IS THIS DESC")
+        print(desc)
+        print(type(desc))
+        print(dir(desc))
 
         desc = cursor.getdesc()
 
