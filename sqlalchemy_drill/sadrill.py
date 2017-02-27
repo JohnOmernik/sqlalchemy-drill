@@ -242,28 +242,19 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
     def get_table_names(self, connection, schema=None, **kw):
         location = ""
-#        print("******in get table names")
-#        print(connection)
-#        print(self)
-#        print (kw)
-
- #       drill = PyDrill(host=self.host, port=self.port)
-        #file_dict = connection.execute("SHOW FILES IN " + location)
         print("get_table_names")
         print(type(connection))
         print(dir(connection))
 
         curs = connection.execute("SHOW FILES")
-        print(type(curs))
-        print(dir(curs))
 
         temp = []
         for row in curs:
             print(row.name)
-#            print(type(row))
-#            print(dir(row))
-#        print(temp)
-        table_names = ""
+            temp.append(row.name)
+        print(temp)
+
+        table_names = tuple(temp)
 
         return table_names
 
