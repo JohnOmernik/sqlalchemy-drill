@@ -175,41 +175,48 @@ class DrillDialect_sadrill(default.DefaultDialect):
         print("Description")
 
         desc = cursor.cursor.getdesc()
-
-        print(desc)
-
-        for row in cursor:
-            print(row)
-            print(type(row))
-            print(dir(row))
-
-
         result = []
-        for info in cursor:
-            print(type(info))
-            print(info)
-
-            cname = info[0]
+        for col in desc:
+            cname = col[0]
             bisnull = True
-            ctype = info[1]
-            try:
-                coltype = _type_map[ctype]
-                print("Found Map: " + ctype)
-            except KeyError:
-                #If the type is unknown, make it a VARCHAR
-                coltype = types.VARCHAR
-
+            ctype = col[1]
             column = {
                 "name": cname,
-                "type": coltype,
+                "type": ctype,
                 "default": None,
                 "autoincrement": None,
                 "nullable": bisnull,
             }
-            print( column )
             result.append(column)
         print(result)
-        return result
+        return(result)
+#        print(desc)
+
+#        for info in cursor:
+#            print(type(info))
+#            print(info)
+
+ #           cname = info[0]
+ #           bisnull = True
+ #           ctype = info[1]
+ #           try:
+ #               coltype = _type_map[ctype]
+ #               print("Found Map: " + ctype)
+ #           except KeyError:
+ #               #If the type is unknown, make it a VARCHAR
+ #               coltype = types.VARCHAR
+
+#            column = {
+#                "name": cname,
+#                "type": coltype,
+#                "default": None,
+#                "autoincrement": None,
+#               "nullable": bisnull,
+#            }
+#            print( column )
+#            result.append(column)
+#        print(result)
+#        return result
 
 
     def get_table_names(self, connection, schema=None, **kw):
