@@ -260,9 +260,9 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         temp = []
         for row in curs:
-            print(row)
-            print(type(row))
-            print(dir(row))
+            print(row.keys)
+#            print(type(row))
+#            print(dir(row))
 #        print(temp)
         table_names = ""
 
