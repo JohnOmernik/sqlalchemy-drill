@@ -203,7 +203,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
         curs = connection.execute("SHOW FILES")
         temp = []
         for row in curs:
-            print(row.name)
             temp.append(row.name)
         table_names = tuple(temp)
         return table_names
@@ -212,7 +211,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
         curs = connection.execute("SHOW TABLES")
         temp = []
         for row in curs:
-            print(row.name)
             temp.append(row.name)
         table_names = tuple(temp)
         return table_names
