@@ -244,8 +244,7 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
 
     if verify_ssl == False:
         session.verify = False
-    else
-
+    else:
         if ca_certs != None:
             session.verify = ca_certs
         else:
