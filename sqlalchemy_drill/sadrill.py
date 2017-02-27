@@ -111,12 +111,12 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
     def dbapi(cls):
         print("######## In dbai")
-        import sqlalchemy_drill.drilldbapi.drill as module
+        import sqlalchemy_drill.drilldbapi.drilldbapi as module
         return module
 
     def connect(self, *cargs, **cparams):
         print("########### insadrill connect")
-        return self.dbapi.Connection(autocommit=True, *cargs, **cparams)
+        return self.dbapi.connect(autocommit=True, *cargs, **cparams)
 
 
 #    def dbapi(cls):
