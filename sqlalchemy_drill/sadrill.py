@@ -224,6 +224,8 @@ class DrillDialect_sadrill(default.DefaultDialect):
         curs = connection.execute("SHOW FILES")
         temp = []
         for row in curs:
+            print(row.name)
+            print(row.isFile)
             if row.name.find(".view.drill") >= 0 and row.isFile == "true":
                 myname = row.name.replace(".view.drill", "")
                 temp.append(myname)
