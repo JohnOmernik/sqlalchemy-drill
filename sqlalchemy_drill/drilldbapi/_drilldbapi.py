@@ -218,7 +218,7 @@ class Connection(object):
     def __init__(self, host, db, port, proto, session):
         self.host = host
         self.db = db
-        self.proto
+        self.proto = proto
         self.port = port
         self._session = session
         self._connected = True
@@ -246,7 +246,6 @@ class Connection(object):
     @connected
     def cursor(self):
         return Cursor(self.host, self.db, self.port, self._session, self)
-        
 
 def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=None, verify_ssl=False, ca_certs=None):
     session = Session()
@@ -268,7 +267,6 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
     else:
         proto = "https://"
 
-    print(local_payload)
     if drilluser == None:
         response = session.post(proto + host + ":" + str(port) + local_url,
                              data = dumps(local_payload),
