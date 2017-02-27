@@ -173,8 +173,11 @@ class DrillDialect_sadrill(default.DefaultDialect):
         cursor = connection.execute(q)
 
         print("Description")
-        print(type(cursor.description))
-        print(cursor.description)
+        desc = cursor.getdesc()
+
+        print(type(desc))
+
+        print(cursor.desc)
         result = []
         for info in cursor:
             print(type(info))
