@@ -215,20 +215,20 @@ class DrillDialect_sadrill(default.DefaultDialect):
         curs = connection.execute("SHOW FILES")
         temp = []
         for row in curs:
-            print(row)
-            temp.append(row.name)
+            if row.isDirectory == "true":
+                temp.append(row.name)
         table_names = tuple(temp)
-
-        hello = 10 / 0
         return table_names
 
     def get_view_names(self, connection, schema=None, **kw):
-        curs = connection.execute("SHOW TABLES")
+        curs = connection.execute("SHOW FILES")
         temp = []
         for row in curs:
-            temp.append(row.name)
-        table_names = tuple(temp)
-        return table_names
+            if row.name.find(".view.drill") >= 0 and row.isFile == "true":
+                myname = row.name.replace(".view.drill", "")
+                temp.append(myname)
+        view_names = tuple(temp)
+        return view_names
 
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
         """Drill has no support for foreign keys.  Returns an empty list."""
