@@ -250,6 +250,10 @@ class DrillDialect_sadrill(default.DefaultDialect):
  #       drill = PyDrill(host=self.host, port=self.port)
         #file_dict = connection.execute("SHOW FILES IN " + location)
         print("get_table_names")
+        print(type(connection))
+        print(dir(connection))
+        print(type(self))
+        print(dir(self))
         curs = connection.cursor()
 
         file_dict = curs.execute("SHOW FILES")
