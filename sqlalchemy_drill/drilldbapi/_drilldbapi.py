@@ -252,7 +252,7 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
     session = Session()
 
     if ca_certs != None:
-        session.cert = client_cert
+        session.cert = ca_certs
     session.verify = verify_ssl
 
     if drilluser == None:
