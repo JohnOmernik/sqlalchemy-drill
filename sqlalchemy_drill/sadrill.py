@@ -175,12 +175,12 @@ class DrillDialect_sadrill(default.DefaultDialect):
         print("Description")
         print(dir(cursor._metadata))
 
-        print(type(cursor.cursor))
-        print(cursor.cursor.getdesc())
+        desc = cursor.cursor.getdesc()
+        for x in desc:
+            print(type(x))
+            print(x)
+            print(dir(x))
 
-        print(type(cursor))
-        print(dir(cursor))
-        print(cursor)
         desc = cursor.getdesc()
 
         result = []
