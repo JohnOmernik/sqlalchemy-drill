@@ -259,7 +259,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         temp = []
         for row in curs:
-            print(dict(row))
+            print(row.name)
 #            print(type(row))
 #            print(dir(row))
 #        print(temp)
