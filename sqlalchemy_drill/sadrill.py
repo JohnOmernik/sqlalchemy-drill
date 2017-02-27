@@ -242,11 +242,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
     def get_table_names(self, connection, schema=None, **kw):
         location = ""
-        if (len(self.workspace) > 0):
-            location = self.storage_plugin + "." + self.workspace
-        else:
-            location = self.storage_plugin
-        
 #        print("******in get table names")
 #        print(connection)
 #        print(self)
@@ -255,13 +250,14 @@ class DrillDialect_sadrill(default.DefaultDialect):
  #       drill = PyDrill(host=self.host, port=self.port)
         #file_dict = connection.execute("SHOW FILES IN " + location)
         print("get_table_names")
-        file_dict = connection.execute("SHOW FILES")
+        curs = connection.cursor()
+
+        file_dict = curs.execute("SHOW FILES")
         print(type(file_dict))
         print(file_dict)
         temp = []
         for row in file_dict:
             print(row)
-            
             temp.append(row[0])
         print(temp)
         table_names = tuple(temp)
