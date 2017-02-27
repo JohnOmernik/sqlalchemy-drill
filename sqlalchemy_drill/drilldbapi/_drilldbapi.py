@@ -75,19 +75,8 @@ def substitute_in_query(string_query, parameters):
             query = query.replace("?", str(param), 1)
     return query
 
-def submit_query(query, host, db, port, proto, session):
-    local_payload_db = _PAYLOAD.copy()
+def submit_query(query, host, port, proto, session):
     local_payload = _PAYLOAD.copy()
-    if db != None:
-        local_payload_db["query"] = "USE {}".format(db)
-        session.post(proto
-                 + host
-                 + ":"
-                 + str(port)
-                 + "/query.json",
-                 data = dumps(local_payload_db),
-                 headers = _HEADER)
-
     local_payload["query"] = query
     return session.post(proto
                         + host
