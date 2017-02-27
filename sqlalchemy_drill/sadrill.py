@@ -90,7 +90,7 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
 
 
 class DrillDialect_sadrill(default.DefaultDialect):
-    name = 'drill'
+    name = 'drilldbapi'
     driver = 'rest'
     preparer = DrillIdentifierPreparer
     statement_compiler = DrillCompiler_sadrill
@@ -111,7 +111,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
     def dbapi(cls):
         print("######## In dbai")
-        import sqlalchemy_drill.drilldbapi.drilldbapi as module
+        import sqlalchemy_drill.sadrill.drilldbapi as module
         return module
 
     def connect(self, *cargs, **cparams):
@@ -137,26 +137,27 @@ class DrillDialect_sadrill(default.DefaultDialect):
                 p = url.password
             else:
                 p = ""
-    
-            drill_auth = url.username + ":" + p
-        else:
-            drill_auth = ""
+            qargs = {
+                'host': url.host,
+                'port': url.port or 8048,
+                'drilluser':  url.username,
+                'drillpass': p
+             }
 
-        qargs = {
-            'host': url.host,
-            'port': url.port or 8048,
-            'drill_auth':  drill_auth,
- #           'username': url.username,
-        }
+        else:
+            qargs = {
+                'host': url.host,
+                'port': url.port
+             }
+
 
         qargs.update(url.query)
 
         # Save this for later.
         self.host = url.host
         self.port = url.port
-        self.drill_auth = drill_auth
         self.username = url.username
-
+        self.password = url.password
         if len(db_parts) == 1:
             qargs['catalog'] = db_parts[0]
             self.storage_plugin = db_parts[0]
