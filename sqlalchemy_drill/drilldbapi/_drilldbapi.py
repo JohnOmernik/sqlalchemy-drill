@@ -242,9 +242,15 @@ class Connection(object):
 def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=None, verify_ssl=False, ca_certs=None):
     session = Session()
 
-    if ca_certs != None:
-        session.verify = ca_certs
+    if verify_ssl == False:
+        session.verify = False
+    else
 
+        if ca_certs != None:
+            session.verify = ca_certs
+        else:
+            session.verify = True
+    
     if drilluser == None:
         local_payload = _PAYLOAD.copy()
         local_url = "/query.json"
