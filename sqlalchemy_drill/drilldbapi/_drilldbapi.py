@@ -173,7 +173,7 @@ class Cursor(object):
         try:
             return self._resultSet.ix[next(self._resultSetStatus)]
         except StopIteration:
-            return None
+            return None  # We need to put None rather than Series([]) because SQLAlchemy processes that a row with no columns which it doesn't like
 #            return Series([])
 
     @connected

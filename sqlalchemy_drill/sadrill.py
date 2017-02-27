@@ -110,27 +110,13 @@ class DrillDialect_sadrill(default.DefaultDialect):
     @classmethod
 
     def dbapi(cls):
-        print("######## In dbai")
         import sqlalchemy_drill.drilldbapi as module
         return module
 
     def connect(self, *cargs, **cparams):
-        print("########### insadrill connect")
-#        return self.dbapi.connect(autocommit=True, *cargs, **cparams)
         return self.dbapi.connect(*cargs, **cparams)
 
-
-#    def dbapi(cls):
-#        print("########### in sadrill.dbapi")
-#        return drill
-#    def connect(self, *cargs, **cparams):
-#        print("############ In sadrill.DrillDialect.connect")
-#        print(cargs)
-#        print(cparams)
-#        return self.dbapi.PyDrill(autocommit=True, *cargs, **cparams)
-
     def create_connect_args(self, url, **kwargs):
-        print("In create connect args")
         db_parts = (url.database or 'drill').split('/')
         db = ".".join(db_parts)
         if url.username:
@@ -151,7 +137,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
                 'port': url.port
              }
 
-
         qargs.update(url.query)
 
         # Save this for later.
@@ -161,19 +146,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
         self.password = url.password
         qargs['db'] = db
         self.db = db
-#        if len(db_parts) == 1:
-#            qargs['catalog'] = db_parts[0]
-#            self.storage_plugin = db_parts[0]
-#        elif len(db_parts) == 2:
-#            qargs['catalog'] = db_parts[0]
-#            qargs['schema'] = db_parts[1]
-#            self.storage_plugin = db_parts[0]
-#            self.workspace = db_parts[1]
 
-
-    #    else:
-    #        raise ValueError("Unexpected database format {}".format(url.database))
-        print(qargs)
         return ([], qargs)
 
     def get_schema_names(self, connection, **kw):
@@ -193,30 +166,16 @@ class DrillDialect_sadrill(default.DefaultDialect):
             return False
 
     def get_columns(self, connection, table_name, schema=None, **kw):
-        if len(self.workspace) > 0:
-            table_name = self.storage_plugin + "." + self.workspace + ".`" + table_name + "`"
-        else:
-            table_name = self.storage_plugin + ".`" + table_name + "`"
+ #       q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})#
 
-#        q = "DESCRIBE %(table_id)s" % ({"table_id": table_name})
- #       q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})
-#
- #       print("in get columns!!!!!")
- #       concurs = connection.cursor()
-
-        cursor = connection.cursor(q)
+        print("in get columns!!!!!")
+        q = "DESCRIBE %(table_id)s" % ({"table_id": table_name})
+        cursor = connection.execute(q)
         
-
         result = []
-        #db = drill.connect(host=self.host, port=self.port)
- #       cursor = connection.cursor()
-#        cursor = db.cursor()
- #       cursor.execute(q)
-
-#        for info in cursor.description:
         for info in cursor:
-            print( "ROW INFO!!")
-            print( info )
+            print(type(info))
+            print(info)
 
             cname = info[0]
             bisnull = True
@@ -241,42 +200,21 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
 
     def get_table_names(self, connection, schema=None, **kw):
-        location = ""
-        print("get_table_names")
-        print(type(connection))
-        print(dir(connection))
-
         curs = connection.execute("SHOW FILES")
-
         temp = []
         for row in curs:
-            try:
-                print(row.name)
-                temp.append(row.name)
-            except:
-                print(row)
-        print(temp)
-
+            print(row.name)
+            temp.append(row.name)
         table_names = tuple(temp)
-        print("Done with get_table_names")
         return table_names
 
     def get_view_names(self, connection, schema=None, **kw):
-        location = ""
-        if (len(self.workspace) > 0):
-            location = self.storage_plugin + "." + self.workspace
-        else:
-            location = self.storage_plugin
-
-#        drill = PyDrill(host=self.host, port=self.port)
-        file_dict = connection.query("SHOW TABLES IN " + location)
-
+        curs = connection.execute("SHOW TABLES")
         temp = []
-        for row in file_dict:
-            temp.append(row['name'])
-
+        for row in curs:
+            print(row.name)
+            temp.append(row.name)
         table_names = tuple(temp)
-
         return table_names
 
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
