@@ -215,8 +215,11 @@ class DrillDialect_sadrill(default.DefaultDialect):
         curs = connection.execute("SHOW FILES")
         temp = []
         for row in curs:
+            print(row)
             temp.append(row.name)
         table_names = tuple(temp)
+
+        hello = 10 / 0
         return table_names
 
     def get_view_names(self, connection, schema=None, **kw):
