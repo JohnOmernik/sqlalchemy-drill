@@ -148,7 +148,14 @@ class DrillDialect_sadrill(default.DefaultDialect):
         return ([], qargs)
 
     def get_schema_names(self, connection, **kw):
-        return [row.SCHEMA_NAME for row in connection.execute('SHOW SCHEMAS')]
+        curs = connection.execute("SHOW SCHEMAS")
+        result = []
+
+        for r in curs:
+            if row.SCHEMA_NAME != "cp.default" and row.SCHEMA_NAME != "INFORMATION_SCHEMA":
+                result.append(row.SCHEMA_NAME)
+        return tuple(result)
+#        return [row.SCHEMA_NAME for row in connection.execute('SHOW SCHEMAS')]
 
     def get_selected_workspace(self):
         return self.workspace
