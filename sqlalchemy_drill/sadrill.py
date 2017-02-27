@@ -173,21 +173,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
         cursor = connection.execute(q)
 
         print("Description")
-        print("###########")
-        desc = cursor.cursor.getdesc()
-        
-        print("WHAT IS THIS DESC")
-        print(desc)
-        print(type(desc))
-        print(dir(desc))
-
-
-        print(cursor)
-        print(dir(cursor))
-        print(type(cursor))
-
-        desc = cursor.getdesc()
-
         result = []
         for info in cursor:
             print(type(info))
@@ -198,6 +183,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
             ctype = info[1]
             try:
                 coltype = _type_map[ctype]
+                print("Found Map: " + ctype)
             except KeyError:
                 #If the type is unknown, make it a VARCHAR
                 coltype = types.VARCHAR
