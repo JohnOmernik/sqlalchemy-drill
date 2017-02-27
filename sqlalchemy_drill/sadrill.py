@@ -73,13 +73,11 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
     def visit_table(self, table, asfrom=False, **kwargs):
 
         print("########Visit Table")
-        print(table)
-        print(asfrom)
-        print(kwargs)
-        
+        print(table.name)
+        print(self.preparer.quote(table.name, '`')
+        print(self.statement)
+    
 #           print(self)
-        print(dir(self))
-        print(type(self))
 
         if asfrom:
 #            storage_plugin = self.dialect.storage_plugin
