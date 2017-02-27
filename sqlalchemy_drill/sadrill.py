@@ -158,14 +158,16 @@ class DrillDialect_sadrill(default.DefaultDialect):
         self.port = url.port
         self.username = url.username
         self.password = url.password
-        if len(db_parts) == 1:
-            qargs['catalog'] = db_parts[0]
-            self.storage_plugin = db_parts[0]
-        elif len(db_parts) == 2:
-            qargs['catalog'] = db_parts[0]
-            qargs['schema'] = db_parts[1]
-            self.storage_plugin = db_parts[0]
-            self.workspace = db_parts[1]
+        qargs['db'] = db_parts
+        self.db = db_parts
+#        if len(db_parts) == 1:
+#            qargs['catalog'] = db_parts[0]
+#            self.storage_plugin = db_parts[0]
+#        elif len(db_parts) == 2:
+#            qargs['catalog'] = db_parts[0]
+#            qargs['schema'] = db_parts[1]
+#            self.storage_plugin = db_parts[0]
+#            self.workspace = db_parts[1]
 
 
         else:
