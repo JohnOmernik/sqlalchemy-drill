@@ -20,7 +20,7 @@ class Warning(Exception):
 class Error(Exception):
     pass
 
-class AuthError(Error)
+class AuthError(Error):
     def __init__(self, message, httperror):
         self.message = message
         self.httperror = httperror
