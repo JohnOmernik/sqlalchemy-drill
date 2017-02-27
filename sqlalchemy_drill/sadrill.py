@@ -254,8 +254,10 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
  #       drill = PyDrill(host=self.host, port=self.port)
         #file_dict = connection.execute("SHOW FILES IN " + location)
+        print("get_table_names")
         file_dict = connection.execute("SHOW FILES")
-
+        print(type(file_dict))
+        print(file_dict)
         temp = []
         for row in file_dict:
             temp.append(row['name'])
