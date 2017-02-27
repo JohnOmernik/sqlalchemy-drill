@@ -206,8 +206,7 @@ class Cursor(object):
         print("In Fetch all")
         try:
             
-#            remaining = self._resultSet[next(self._resultSetStatus):]
-            remaining = self._resultSet
+            remaining = self._resultSet[next(self._resultSetStatus):]
             self._resultSetStatus = iter(tuple())
 
             print(remaining)
