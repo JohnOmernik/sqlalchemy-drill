@@ -76,31 +76,14 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
         print(table.name)
         print(table.schema)
 
-        if table.schema != "":
-            fixed_schema = ".".join(["`" + i + "`" for i in table.schema.split(".")])
-            print(fixed_schema)
-           
-
-        print(dir(table))
-        print(self.preparer.quote(table.name, '`'))
-        print(self.statement)
-    
-#           print(self)
-
         if asfrom:
-#            storage_plugin = self.dialect.storage_plugin
-#            workspace = self.dialect.workspace
-
-            
-
-#            full_table = storage_plugin + "." + workspace + "."
-            full_table = "dasdsadas"
-            if not table.name.startswith( full_table ):
-                corrected_table = full_table + self.preparer.quote(table.name, '`')
-                print( "Fixed table: " + corrected_table)
-                return corrected_table
+            if table.schema != "":
+                fixed_schema = ".".join(["`" + i.replace('`', '') + "`" for i in table.schema.split(".")])
+                fixed_table = fixed_schema + "." + self.preparer.quote(table.name, '`')
+                print(fixed_table)
             else:
-                return self.preparer.quote(table.name, '`')
+                fixed_table = self.preparer.quote(table.name, '`')
+            return fixed_table
         else:
             return ""
 
