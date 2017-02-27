@@ -176,6 +176,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         desc = cursor.cursor.getdesc()
         for x in desc:
+            print("wee")
             print(type(x))
             print(x)
             print(dir(x))
