@@ -74,6 +74,7 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
 
         print("########Visit Table")
         print(table.name)
+        print(dir(table))
         print(self.preparer.quote(table.name, '`'))
         print(self.statement)
     
