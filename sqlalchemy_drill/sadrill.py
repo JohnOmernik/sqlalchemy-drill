@@ -174,6 +174,10 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         print("Description")
 
+        desc = cursor.cursor.getdesc()
+
+        print(desc)
+
         for row in cursor:
             print(row)
             print(type(row))
