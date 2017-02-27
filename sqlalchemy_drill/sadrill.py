@@ -252,19 +252,19 @@ class DrillDialect_sadrill(default.DefaultDialect):
         print("get_table_names")
         print(type(connection))
         print(dir(connection))
-        print(type(self.connection))
-        print(dir(self.connection))
-        curs = connection.cursor()
 
-        file_dict = curs.execute("SHOW FILES")
-        print(type(file_dict))
-        print(file_dict)
+        curs = connection.execute("SHOW FILES")
+        print(type(curs))
+        print(dir(curs))
+
+
         temp = []
-        for row in file_dict:
+        for row in curs:
             print(row)
-            temp.append(row[0])
-        print(temp)
-        table_names = tuple(temp)
+            print(type(row))
+            print(dir(row))
+#        print(temp)
+        table_names = ""
 
         return table_names
 
