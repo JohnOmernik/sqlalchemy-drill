@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 Created on Thu Dec  1 08:58:12 2016
@@ -76,7 +75,6 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
             if table.schema != "":
                 fixed_schema = ".".join(["`" + i.replace('`', '') + "`" for i in table.schema.split(".")])
                 fixed_table = fixed_schema + ".`" + table.name.replace("`", "") + "`"
-                print(fixed_table)
             else:
                 fixed_table = "`" + table.name.replace("`", "") + "`"
             return fixed_table
@@ -92,7 +90,6 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
 class DrillDialect_sadrill(default.DefaultDialect):
     name = 'drilldbapi'
     driver = 'rest'
-    echo = True
     preparer = DrillIdentifierPreparer
     statement_compiler = DrillCompiler_sadrill
     poolclass = pool.SingletonThreadPool
@@ -106,7 +103,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
     description_encoding = None
     supports_native_boolean = True
     storage_plugin = ""
-
     workspace = ""
 
     @classmethod
