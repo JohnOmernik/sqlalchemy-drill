@@ -24,6 +24,16 @@ So, we are "limping along" and working as is, but contribution and just testing/
 to drillpy and pydrill for code used increating the drilldbapi.py code for connecting!
 
 
+
+# NOTE PLEASE READ
+Much of the this readme is wrong right now. I need to do updates
+Right now all you need to do is python3 setup.py install this on the box you will be runnign super set on then create a URL that looks like this:
+
+drill+sadrill://username:password@drillhost:drillport/dfs/yourdb?use_ssl=True
+
+I will update more later... sorry for the lack doc updates!
+
+
 ## Dependencies
 There are a couple of ways to approach using/developing on this: 
 
