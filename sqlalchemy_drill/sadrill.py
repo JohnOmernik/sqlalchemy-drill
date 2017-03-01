@@ -7,8 +7,8 @@ Created on Thu Dec  1 08:58:12 2016
 from __future__ import absolute_import
 from __future__ import unicode_literals
 from distutils.version import StrictVersion
-from pydrill.dbapi import drill
-from pydrill.client import PyDrill
+#from sqlalchemy_drill.drilldbapi import drill
+#from pydrill.client import PyDrill
 from sqlalchemy import exc, pool, types
 from sqlalchemy import util
 from sqlalchemy import VARCHAR, INTEGER, FLOAT, DATE, TIMESTAMP, TIME, Interval, DECIMAL, LargeBinary, BIGINT, SMALLINT
@@ -34,8 +34,6 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
         super(DrillIdentifierPreparer, self). \
             __init__(dialect, initial_quote='`', final_quote='`')
 
-
-
 try:
     from sqlalchemy.types import BigInteger
 except ImportError:
@@ -43,21 +41,26 @@ except ImportError:
 
 _type_map = {
     'bigint': types.BIGINT,
+    'BIGINT': types.BIGINT,
     'binary': types.LargeBinary,
     'boolean': types.BOOLEAN,
     'date': types.DATE,
+    'DATE': types.DATE,
     'decimal': types.DECIMAL,
     'double': types.FLOAT,
     'integer': types.INTEGER,
     'interval': types.Interval,
     'smallint': types.SMALLINT,
     'timestamp': types.TIMESTAMP,
+    'TIMESTAMP': types.TIMESTAMP,
     'time': types.TIME,
-    'varchar': types.String
+    'varchar': types.String,
+    'CHARACTER VARYING': types.String,
+    'ANY': types.String
 }
 
 
-class DrillCompiler_pydrill(compiler.SQLCompiler):
+class DrillCompiler_sadrill(compiler.SQLCompiler):
     def default_from(self):
         """Called when a ``SELECT`` statement has no froms,
         and no ``FROM`` clause is to be appended.
@@ -69,17 +72,14 @@ class DrillCompiler_pydrill(compiler.SQLCompiler):
         return 'length{}'.format(self.function_argspec(fn, **kw))
 
     def visit_table(self, table, asfrom=False, **kwargs):
-        if asfrom:
-            storage_plugin = self.dialect.storage_plugin
-            workspace = self.dialect.workspace
 
-            full_table = storage_plugin + "." + workspace + "."
-            if not table.name.startswith( full_table ):
-                corrected_table = full_table + self.preparer.quote(table.name, '`')
-                print( "Fixed table: " + corrected_table)
-                return corrected_table
+        if asfrom:
+            if table.schema != "":
+                fixed_schema = ".".join(["`" + i.replace('`', '') + "`" for i in table.schema.split(".")])
+                fixed_table = fixed_schema + ".`" + table.name.replace("`", "") + "`"
             else:
-                return self.preparer.quote(table.name, '`')
+                fixed_table = "`" + table.name.replace("`", "") + "`"
+            return fixed_table
         else:
             return ""
 
@@ -89,11 +89,11 @@ class DrillCompiler_pydrill(compiler.SQLCompiler):
 
 
 
-class DrillDialect_pydrill(default.DefaultDialect):
-    name = 'drill'
+class DrillDialect_sadrill(default.DefaultDialect):
+    name = 'drilldbapi'
     driver = 'rest'
     preparer = DrillIdentifierPreparer
-    statement_compiler = DrillCompiler_pydrill
+    statement_compiler = DrillCompiler_sadrill
     poolclass = pool.SingletonThreadPool
     supports_alter = False
     supports_pk_autoincrement = False
@@ -108,41 +108,47 @@ class DrillDialect_pydrill(default.DefaultDialect):
     workspace = ""
 
     @classmethod
+
     def dbapi(cls):
-        return drill
+        import sqlalchemy_drill.drilldbapi as module
+        return module
 
-    def create_connect_args(self, url):
+    def connect(self, *cargs, **cparams):
+        return self.dbapi.connect(*cargs, **cparams)
 
+    def create_connect_args(self, url, **kwargs):
         db_parts = (url.database or 'drill').split('/')
-        kwargs = {
-            'host': url.host,
-            'port': url.port or 8047,
-            'username': url.username,
-        }
-        kwargs.update(url.query)
+        db = ".".join(db_parts)
+        if url.username:
+            if url.password:
+                p = url.password
+            else:
+                p = ""
+            qargs = {
+                'host': url.host,
+                'port': url.port or 8048,
+                'drilluser':  url.username,
+                'drillpass': p
+             }
+
+        else:
+            qargs = {
+                'host': url.host,
+                'port': url.port
+             }
+
+        qargs.update(url.query)
 
         # Save this for later.
         self.host = url.host
         self.port = url.port
         self.username = url.username
+        self.password = url.password
+        qargs['db'] = db
+        self.db = db
 
-        if len(db_parts) == 1:
-            kwargs['catalog'] = db_parts[0]
-            self.storage_plugin = db_parts[0]
-        elif len(db_parts) == 2:
-            kwargs['catalog'] = db_parts[0]
-            kwargs['schema'] = db_parts[1]
-            self.storage_plugin = db_parts[0]
-            self.workspace = db_parts[1]
+        return ([], qargs)
 
-
-        else:
-            raise ValueError("Unexpected database format {}".format(url.database))
-
-        return ([], kwargs)
-
-    def get_schema_names(self, connection, **kw):
-        return [row.SCHEMA_NAME for row in connection.execute('SHOW DATABASES')]
 
     def get_selected_workspace(self):
         return self.workspace
@@ -157,77 +163,87 @@ class DrillDialect_pydrill(default.DefaultDialect):
         except exc.NoSuchTableError:
             return False
 
-    def get_columns(self, connection, table_name, schema=None, **kw):
-        if len(self.workspace) > 0:
-            table_name = self.storage_plugin + "." + self.workspace + ".`" + table_name + "`"
-        else:
-            table_name = self.storage_plugin + ".`" + table_name + "`"
+    def LIMIT1_get_columns(self, connection, table_name, schema=None, **kw):
+        # This method stinks at getting columns from a speed perspective, because it's slow (it has to process a query)
+        # However, it's accurate, because it takes a look at the data, and provides a good representation of the types it saw. (for 1 record, not idea...)
 
-        q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})
+        q = "SELECT * FROM %(table_id)s LIMIT 1" % ({"table_id": table_name})#
+
+#        q = "DESCRIBE %(table_id)s" % ({"table_id": table_name})
+        cursor = connection.execute(q)
 
 
-        columns = connection.execute(q)
+        desc = cursor.cursor.getdesc()
         result = []
-        db = drill.connect(host=self.host, port=self.port)
-        cursor = db.cursor()
-        cursor.execute(q)
-        for info in cursor.description:
-            print( "ROW INFO!!")
-            print( info )
-            try:
-                coltype = _type_map[info[1]]
-            except KeyError:
-                #If the type is unknown, make it a VARCHAR
-                coltype = types.VARCHAR
-
+        for col in desc:
+            cname = col[0]
+            bisnull = True
+            ctype = _type_map[col[1]]
             column = {
-                "name": info[0],
-                "type": coltype,
+                "name": cname,
+                "type": ctype,
                 "default": None,
                 "autoincrement": None,
-                "nullable": True,
+                "nullable": bisnull,
             }
-            print( column )
             result.append(column)
+        return(result)
 
-        return result
+    def get_columns(self, connection, table_name, schema=None, **kw):
+
+
+        q = "DESCRIBE %(table_id)s" % ({"table_id": table_name})
+        cursor = connection.execute(q)
+
+        result = []
+        for col in cursor:
+            cname = col[0]
+            ctype = _type_map[col[1]]
+            bisnull = True
+            column = {
+                "name": cname,
+                "type": ctype,
+                "default": None,
+                "autoincrement": None,
+                "nullable": bisnull,
+            }
+            result.append(column)
+        return(result)
 
 
     def get_table_names(self, connection, schema=None, **kw):
-        location = ""
-        if (len(self.workspace) > 0):
-            location = self.storage_plugin + "." + self.workspace
-        else:
-            location = self.storage_plugin
-
-        drill = PyDrill(host=self.host, port=self.port)
-        file_dict = drill.query("SHOW FILES IN " + location)
-
+        curs = connection.execute("SHOW FILES")
         temp = []
-        for row in file_dict:
-            temp.append(row['name'])
-
+        for row in curs:
+            if row.name.find(".view.drill") >= 0:
+                myname = row.name.replace(".view.drill", "")
+            else:
+                myname = row.name
+            temp.append(myname)
         table_names = tuple(temp)
-
         return table_names
 
+    def get_schema_names(self, connection, **kw):
+        curs = connection.execute("SHOW SCHEMAS")
+        result = []
+
+        for row in curs:
+            if row.SCHEMA_NAME != "cp.default" and row.SCHEMA_NAME != "INFORMATION_SCHEMA":
+                result.append(row.SCHEMA_NAME)
+        return tuple(result)
+#        return [row.SCHEMA_NAME for row in connection.execute('SHOW SCHEMAS')]
     def get_view_names(self, connection, schema=None, **kw):
-        location = ""
-        if (len(self.workspace) > 0):
-            location = self.storage_plugin + "." + self.workspace
-        else:
-            location = self.storage_plugin
-
-        drill = PyDrill(host=self.host, port=self.port)
-        file_dict = drill.query("SHOW TABLES IN " + location)
-
-        temp = []
-        for row in file_dict:
-            temp.append(row['name'])
-
-        table_names = tuple(temp)
-
-        return table_names
+        return []
+ #       curs = connection.execute("SHOW FILES")
+ #       temp = []
+ #       for row in curs:
+ #           print(row.name)
+ #           print(row.isFile)
+ #           if row.name.find(".view.drill") >= 0 and row.isFile == "true":
+ #               myname = row.name.replace(".view.drill", "")
+ #               temp.append(myname)
+ #       view_names = tuple(temp)
+ #       return view_names
 
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
         """Drill has no support for foreign keys.  Returns an empty list."""

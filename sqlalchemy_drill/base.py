@@ -39,7 +39,7 @@ class DrillCompiler(compiler.SQLCompiler):
     def visit_join(self, join, asfrom=False, **kwargs):
         mydebug = 0
         # The main goal of this visit_join is to pull apart the JOIN and add the table aliases to the ON Clause as Drill is finding ambiguous columns. 
-        # Pulls apart the JOIN. Todo: More work to understand what we know about a JOIN and ensure we catching all cases        
+        # Pulls apart the JOIN. Todo: More work to understand what we know about a JOIN and ensure we catching all case
         left_raw = join.left._compiler_dispatch(self, asfrom=True, **kwargs)
         right_raw = join.right._compiler_dispatch(self, asfrom=True, **kwargs)
         onclause_raw = join.onclause._compiler_dispatch(self, **kwargs)
@@ -78,13 +78,13 @@ class DrillCompiler(compiler.SQLCompiler):
             print( "===========================================" )
             print( "===========================================" )
             print( dir(join) )
-    
+
         # To Do: We need to handle RIGHT OUTER JOINS
         if join.isouter:
             join_type = " LEFT OUTER JOIN "
         else:
             join_type = " JOIN "
-    
+
         # THis is looking for the as alias so we can interject them into the ON clause First on the LEFT and then on the RIGHT
         if left_raw.lower().find(" as ") > 0:
             t = left_raw.lower().split(" as ")
@@ -100,7 +100,7 @@ class DrillCompiler(compiler.SQLCompiler):
         # This fixes the ON Clause and adds aliases
         o = onclause_raw.split(" = ")
         otmp = "%s.%s = %s.%s" % (left_table, o[0], right_table, o[1])
-               
+
         return (
             join.left._compiler_dispatch(self, asfrom=True, **kwargs) +
             join_type +
@@ -162,11 +162,11 @@ class DrillDialect(default.DefaultDialect):
 
     @classmethod
     def dbapi(cls):
-        import pyodbc as module
+        import pydrill.client as module
         return module
 
     def connect(self, *cargs, **cparams):
-        return self.dbapi.connect(autocommit=True, *cargs, **cparams)
+        return self.dbapi.PyDrill(autocommit=True, *cargs, **cparams)
 
     def create_connect_args(self, url):
         opts = url.translate_connect_args()
@@ -206,7 +206,7 @@ class DrillDialect(default.DefaultDialect):
         table_names = [r[0] for r in result]
         return table_names
 
-    # The following three functions are needed to ensure drill returns columns to caravel
+    # The following three functions are needed to ensure drill returns columns to superset
     def get_primary_keys(self, connection, table_name, schema=None, **kw):
         return []
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):

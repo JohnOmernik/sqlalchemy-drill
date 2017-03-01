@@ -20,6 +20,8 @@ Currently we can connect to drill, and issue queries for basic visualizations an
 So, we are "limping along" and working as is, but contribution and just testing/use to identify issues would be very welcome! 
 
 
+### Many thanks
+to drillpy and pydrill for code used increating the drilldbapi.py code for connecting!
 
 
 ## Dependencies
