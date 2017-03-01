@@ -23,8 +23,6 @@ So, we are "limping along" and working as is, but contribution and just testing/
 ### Many thanks
 to drillpy and pydrill for code used increating the drilldbapi.py code for connecting!
 
-
-
 # NOTE PLEASE READ
 Much of the this readme is wrong right now. I need to do updates
 Right now all you need to do is python3 setup.py install this on the box you will be runnign super set on then create a URL that looks like this:
@@ -34,52 +32,11 @@ drill+sadrill://username:password@drillhost:drillport/dfs/yourdb?use_ssl=True
 I will update more later... sorry for the lack doc updates!
 
 
-## Dependencies
-There are a couple of ways to approach using/developing on this: 
 
+### Docker 
+Get the superset repo
 
-### Docker Approach
----
-While using virtualenv is typically prefered, there is a docker container that works at 
-
-https://github.com/JohnOmernik/caraveldrill
-
-This Dockerfile will build a container has caravel, pyodbc, unixodbc, the MapR Drill ODBC connector all installed ready to go.  In fact all one has to do is set a directory to this repo, in the run.sh script in JohnOmernik/caraveldrill repo and do this:
-* Run the container
-* Determine the running container ID use docker ps
-* Use docker exec -it %CONTAINERID% /bin/bash to start another shell in the running container
-* cd to the directory that was mounted that has this repo
-* run python /path/to/thisrepo/setup.py install
-* This will install the dialect and make it useable for Caravel
-
-Note: A neat side effect of using Flask is that if you make a change to the dialect files, and then rerun the python setup.py install while Caravel is running, Caravel picks up on the new dialect and reloads itself automagically. This is great for iterative development and testing. I typically have one shell to my caravel runserver -d prompt inside the container, another to the directory with the dialect inside the container, and then a couple of others to the actual code outside the container... it works great. Update the code, switch, install it, and then test in the browser!
-
-### virualenv 
-```
-virtualenv env
-. env/bin/activate
-pip install -r requirements/test.txt
-```
-
-## Running tests
-```
-python run_tests.py -v -s
-```
-
-Debugging is enabled by inserting ```import pdb; pdb.set_trace()```
-
-Also, if using caravel, updating the caravel_config.py to uncomment the debug line will also assist in debugging from caravel 
-
-## FAQ
-
-Q: I get error of "[IM002] [unixODBC][Driver Manager]Data source name not found, and no default driver specified"
-
-A: Inspect setup.cfg, in section of [db] it will try to connect to default. 
-
-In mac os x you might need to change ~/Library/ODBC/odbc.ini or ~/.odbc.ini with s/Sample MapR Drill DSN/drill_test/.
-
-Q: Why is there all that access stuff in the dialect?
-
-A: Because in learning how to do a dialect, we copied the access pyodbc dialect. It's not ideal, and once we figure that a certain function/class isn't needed for drill, or can be replaced by a drill specific one, that is our goal. 
-
+FROM supersetimage(not sure it's name)
+RUN git clone https://github.com/JohnOmernik/sqlalchemy-drill && cd sqlalchemy-drill && python3 setup.py install 
+CMD["superset"]
 
