@@ -10,8 +10,6 @@ v.close()
 
 readme = os.path.join(os.path.dirname(__file__), 'README.md')
 
-#['sqlalchemy_drill'],
-
 setup(name='sqlalchemy_drill',
       version=VERSION,
       description="Apache Drill for SQLAlchemy",
