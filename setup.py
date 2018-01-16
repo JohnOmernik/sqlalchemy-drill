@@ -1,9 +1,10 @@
 import os
+import sys
 import re
 
 from setuptools import setup, find_packages
 
-v = open(os.path.join(os.path.dirname(__file__), 'sqlalchemy_drill', '__init__.py'))
+v = open(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'sqlalchemy2drill', '__init__.py'))
 VERSION = re.compile(r".*__version__ = '(.*?)'", re.S).match(v.read()).group(1)
 v.close()
 
@@ -30,8 +31,8 @@ setup(name='sqlalchemy_drill',
         "pandas"
       ],
       keywords='SQLAlchemy Apache Drill',
-      author='John Omernik, Charles Givre',
-      author_email='john@omernik.com, cgivre@thedataist.com',
+      author='John Omernik, Charles Givre, Davide Miceli, Massimo Martiradonna',
+      author_email='john@omernik.com, cgivre@thedataist.com, davide.miceli.dap@gmail.com, massimo.martiradonna.dap@gmail.com',
       license='Apache',
       packages=find_packages(),
       include_package_data=True,
