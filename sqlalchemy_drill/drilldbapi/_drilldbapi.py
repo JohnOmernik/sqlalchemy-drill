@@ -279,10 +279,10 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
         local_payload["j_username"] = drilluser
         local_payload["j_password"] = drillpass
         local_url = "/j_security_check"
-    if use_ssl == False:
-        proto = "http://"
-    else:
+    if use_ssl in [True, 'True', 'true']:
         proto = "https://"
+    else:
+        proto = "http://"
 
     if drilluser == None:
         response = session.post(proto + host + ":" + str(port) + local_url,
