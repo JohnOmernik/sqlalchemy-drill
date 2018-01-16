@@ -108,7 +108,7 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
                 return fixed_table
             except Exception:
                 print("************************************")
-                print("Errore in visit_table :: ", Exception.message)
+                print("Error in DrillCompiler_sadrill.visit_table :: ", Exception.message)
                 print("************************************")
         else:
             return ""
@@ -165,7 +165,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
                     qargs['drillpass'] = url.password
         except Exception:
             print("************************************")
-            print("Errore in create_connect_args :: ", Exception.message)
+            print("Error in DrillDialect_sadrill.create_connect_args :: ", Exception.message)
             print("************************************")
         return [], qargs
 
@@ -181,7 +181,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
             return True
         except exc.NoSuchTableError:
             print("************************************")
-            print("Errore in has_table :: ", exc.NoSuchTableError)
+            print("Error in DrillDialect_sadrill.has_table :: ", exc.NoSuchTableError)
             print("************************************")
             return False
 
@@ -221,7 +221,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
                     result.append(row.SCHEMA_NAME)
         except Exception:
             print("************************************")
-            print("Errore in get_schema_names :: ", Exception.message)
+            print("Error in DrillDialect_sadrill.get_schema_names :: ", Exception.message)
             print("************************************")
 
         return tuple(result)
@@ -239,7 +239,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         except Exception:
             print("************************************")
-            print("Errore in get_table_names :: ", Exception.message)
+            print("Error in DrillDialect_sadrill.get_table_names :: ", Exception.message)
             print("************************************")
         return tuple(tables_names)
 

@@ -36,12 +36,12 @@ class Cursor(object):
         def func_wrapper(self, *args, **kwargs):
             if self._connected is False:
                 print("************************************")
-                print("Errore in func_wrapper")
+                print("Error in Cursor.func_wrapper")
                 print("************************************")
                 raise CursorClosedException("Cursor object is closed")
             elif self.connection._connected is False:
                 print("************************************")
-                print("Errore in func_wrapper")
+                print("Error in Cursor.func_wrapper")
                 print("************************************")
                 raise ConnectionClosedException("Connection object is closed")
             else:
@@ -60,7 +60,7 @@ class Cursor(object):
                     query = query.replace("?", str(param), 1)
         except Exception:
             print("************************************")
-            print("Errore in substitute_in_query", Exception.message)
+            print("Error in Cursor.substitute_in_query", Exception.message)
             print("************************************")
         return query
 
@@ -96,7 +96,7 @@ class Cursor(object):
                             types.append("varchar")
         except Exception:
             print("************************************")
-            print("Errore in parse_column_types", Exception.message)
+            print("Error in Cursor.parse_column_types", Exception.message)
             print("************************************")
         return names, types
 
@@ -120,7 +120,7 @@ class Cursor(object):
 
         if result.status_code != 200:
             print("************************************")
-            print("Errore in execute")
+            print("Error in Cursor.execute")
             print("************************************")
             raise ProgrammingError(result.json().get("errorMessage", "ERROR"), result.status_code)
         else:
@@ -149,7 +149,7 @@ class Cursor(object):
                     return self
                 except Exception:
                     print("************************************")
-                    print("Errore in execute", Exception.message)
+                    print("Error in Cursor.execute", Exception.message)
                     print("************************************")
 
     @connected
@@ -238,7 +238,7 @@ class Connection(object):
                     self._connected = False
         except Exception:
             print('*************************')
-            print("Error in is_connected")
+            print("Error in Connection.is_connected")
             print('*************************')
             print(Exception)
         return False
@@ -250,7 +250,7 @@ class Connection(object):
             self.close()
         except Exception:
             print('*************************')
-            print("Error in close_connection")
+            print("Error in Connection.close_connection")
             print('*************************')
             print(Exception)
             return False
@@ -309,14 +309,14 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
 
     if response.status_code != 200:
         print("************************************")
-        print("Errore in connect")
+        print("Error in connect")
         print("************************************")
         raise DatabaseError(str(response.json()["errorMessage"]), response.status_code)
     else:
         raw_data = response.text
         if raw_data.find("Invalid username/password credentials") >= 0:
             print("************************************")
-            print("Errore in connect")
+            print("Error in connect")
             print("************************************")
             raise AuthError(str(raw_data), response.status_code)
 
@@ -333,7 +333,7 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
 
             if response.status_code != 200:
                 print("************************************")
-                print("Errore in connect")
+                print("Error in connect")
                 print("************************************")
                 raise DatabaseError(str(response.json()["errorMessage"]), response.status_code)
 
