@@ -212,7 +212,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
 
     def get_table_names(self, connection, schema=None, **kw):
-        curs = connection.execute("SHOW FILES")
+        curs = connection.execute("SHOW FILES FROM {0}".format(self.db))
         temp = []
         for row in curs:
             if row.name.find(".view.drill") >= 0:
