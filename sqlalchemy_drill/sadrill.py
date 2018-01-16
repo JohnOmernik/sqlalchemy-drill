@@ -106,9 +106,9 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
                     fixed_schema=fixed_schema,table_name=table.name.replace("`", "")
                 )
                 return fixed_table
-            except Exception:
+            except Exception as ex:
                 print("************************************")
-                print("Error in DrillCompiler_sadrill.visit_table :: ", Exception.message)
+                print("Error in DrillCompiler_sadrill.visit_table :: ", str(ex))
                 print("************************************")
         else:
             return ""
@@ -163,9 +163,9 @@ class DrillDialect_sadrill(default.DefaultDialect):
                 qargs['drillpass'] = ""
                 if url.password:
                     qargs['drillpass'] = url.password
-        except Exception:
+        except Exception as ex:
             print("************************************")
-            print("Error in DrillDialect_sadrill.create_connect_args :: ", Exception.message)
+            print("Error in DrillDialect_sadrill.create_connect_args :: ", str(ex))
             print("************************************")
         return [], qargs
 
@@ -219,9 +219,9 @@ class DrillDialect_sadrill(default.DefaultDialect):
             for row in curs:
                 if row.SCHEMA_NAME != "cp.default" and row.SCHEMA_NAME != "INFORMATION_SCHEMA":
                     result.append(row.SCHEMA_NAME)
-        except Exception:
+        except Exception as ex:
             print("************************************")
-            print("Error in DrillDialect_sadrill.get_schema_names :: ", Exception.message)
+            print("Error in DrillDialect_sadrill.get_schema_names :: ", str(ex))
             print("************************************")
 
         return tuple(result)
@@ -237,9 +237,9 @@ class DrillDialect_sadrill(default.DefaultDialect):
                     myname = row.name
                 tables_names.append(myname)
 
-        except Exception:
+        except Exception as ex:
             print("************************************")
-            print("Error in DrillDialect_sadrill.get_table_names :: ", Exception.message)
+            print("Error in DrillDialect_sadrill.get_table_names :: ", str(ex))
             print("************************************")
         return tuple(tables_names)
 

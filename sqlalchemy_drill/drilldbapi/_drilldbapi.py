@@ -58,9 +58,9 @@ class Cursor(object):
                     query = query.replace("?", "'{param}'".format(param=param), 1)
                 else:
                     query = query.replace("?", str(param), 1)
-        except Exception:
+        except Exception as ex:
             print("************************************")
-            print("Error in Cursor.substitute_in_query", Exception.message)
+            print("Error in Cursor.substitute_in_query", str(ex))
             print("************************************")
         return query
 
@@ -94,9 +94,9 @@ class Cursor(object):
                             types.append("timestamp")
                         except ValueError:
                             types.append("varchar")
-        except Exception:
+        except Exception as ex:
             print("************************************")
-            print("Error in Cursor.parse_column_types", Exception.message)
+            print("Error in Cursor.parse_column_types", str(ex))
             print("************************************")
         return names, types
 
@@ -147,9 +147,9 @@ class Cursor(object):
                         )
                     )
                     return self
-                except Exception:
+                except Exception as ex:
                     print("************************************")
-                    print("Error in Cursor.execute", Exception.message)
+                    print("Error in Cursor.execute", str(ex))
                     print("************************************")
 
     @connected
