@@ -4,6 +4,7 @@ from numpy import nan
 from pandas import DataFrame
 from requests import Session
 from pandas import to_datetime
+import re
 
 from . import api_globals
 from .api_exceptions import Error, Warning, AuthError, DatabaseError, ProgrammingError, CursorClosedException, ConnectionClosedException
@@ -11,7 +12,7 @@ from .api_exceptions import Error, Warning, AuthError, DatabaseError, Programmin
 apilevel = '2.0'
 threadsafety = 3
 paramstyle = 'qmark'
-
+default_storage_plugin = ""
 
 # Python DB API 2.0 classes
 class Cursor(object):
@@ -30,6 +31,7 @@ class Cursor(object):
         self._resultSet = None
         self._resultSetStatus = None
         self.rowcount = -1
+
 
     # Decorator for methods which require connection
     def connected(func):
@@ -118,6 +120,14 @@ class Cursor(object):
             self._session
         )
 
+        print("************************************")
+        print("Query:", operation)
+        print("************************************")
+
+        matchObj = re.match('^SHOW FILES FROM\s(.+)', operation, re.IGNORECASE)
+        if matchObj:
+            self.default_storage_plugin = matchObj.group(1)
+
         if result.status_code != 200:
             print("************************************")
             print("Error in Cursor.execute")
@@ -156,7 +166,7 @@ class Cursor(object):
     def fetchone(self):
         try:
             # Added Tuple
-            return self._resultSet.ix[next(self._resultSetStatus)]
+            return self._resultSet.iloc[next(self._resultSetStatus)]
         except StopIteration:
             print("************************************")
             print("Catched StopIteration in fetchone")
@@ -202,6 +212,9 @@ class Cursor(object):
             print("Catched StopIteration in fetchall")
             print("************************************")
             return None
+
+    def get_default_plugin(self):
+        return self.default_storage_plugin
 
     def __iter__(self):
         return self._resultSet.iterrows()
@@ -321,9 +334,12 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
             raise AuthError(str(raw_data), response.status_code)
 
         if db is not None:
-            local_payload = api_globals._PAYLOAD.copy()
-            local_url = "/query.json"
-            local_payload["query"] = "USE {}".format(db)
+            #local_payload = api_globals._PAYLOAD.copy()
+            #local_url = "/query.json"
+            #local_payload["query"] = "USE {}".format(db)
+
+            default_storage_plugin = db
+
 
             response = session.post(
                 "{proto}{host}:{port}{url}".format(proto=proto, host=host, port=str(port), url=local_url),
