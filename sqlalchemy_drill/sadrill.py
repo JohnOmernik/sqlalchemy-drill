@@ -109,6 +109,8 @@ _type_map = {
     'DECIMAL': types.DECIMAL,
     'double': types.FLOAT,
     'DOUBLE': types.FLOAT,
+    'int': types.INTEGER,
+    'INT': types.INTEGER,
     'integer': types.INTEGER,
     'INTEGER': types.INTEGER,
     'interval': types.Interval,
