@@ -113,6 +113,7 @@ _type_map = {
     'TIMESTAMP': types.TIMESTAMP,
     'time': types.TIME,
     'varchar': types.String,
+    'VARCHAR': types.String,
     'CHARACTER VARYING': types.String,
     'ANY': types.String
 }
@@ -168,14 +169,10 @@ class DrillDialect_sadrill(default.DefaultDialect):
     returns_unicode_strings = True
     description_encoding = None
     supports_native_boolean = True
-    storage_plugin = ""
-    plugin_type = ""
-    supported_extensions = []
-    workspace = ""
-    restURL = ""
 
     def __init__(self, **kw):
         default.DefaultDialect.__init__(self, **kw)
+        self.supported_extensions = []
 
     @classmethod
     def dbapi(cls):
@@ -237,10 +234,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
     def get_schema_names(self, connection, **kw):
 
         # Get table information
-        # if self.storage_plugin:
-        #    query = "SELECT DISTINCT WORKSPACE_NAME AS SCHEMA_NAME FROM INFORMATION_SCHEMA.`FILES` WHERE SCHEMA_NAME LIKE '" + self.storage_plugin + "%'"
-        # else:
-
         query = "SHOW DATABASES"
 
         curs = connection.execute(query)
@@ -271,7 +264,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         plugin_type = self.get_plugin_type(connection, quoted_schema)
 
-        print("Plugin Type: ", plugin_type)
         self.plugin_type = plugin_type
         self.quoted_schema = quoted_schema
 
@@ -336,29 +328,36 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
     def get_columns(self, connection, table_name, schema=None, **kw):
 
-        print("************************************")
-        print( "Schema: ", schema)
-        print( "Table Name: ", table_name)
-        print("************************************")
-
+        if "@@@" in table_name:
+            table_name = table_name.replace("@@@", ".")
 
         result = []
 
-        file_name = "`" + schema + "." + table_name + "`"
-        complete_file_name = self.storage_plugin + "." + self.workspace + "." + file_name
+        plugin_type = self.get_plugin_type(connection, schema)
 
-        #q = "SELECT * FROM {file_name} LIMIT 1".format(file_name=complete_file_name)
+        if plugin_type == "file":
+            file_name = schema + "." + table_name
+            quoted_file_name = self.identifier_preparer.format_drill_table(file_name, isFile=True)
+            q = "SELECT * FROM {file_name} LIMIT 1".format(file_name=quoted_file_name)
+            column_metadata = connection.execute(q).cursor.description
 
-        if self.plugin_type == "file":
-            file_name = self.storage_plugin + "." + self.workspace + ".`" + schema + "." + table_name + "`"
-            q = "SELECT * FROM {file_name} LIMIT 1".format(file_name=file_name)
+            for row in column_metadata:
+                column = {
+                    "name": row[0],
+                    "type": _type_map[row[1]],
+                    "longtype": _type_map[row[1]]
+                }
+                result.append(column)
+
+            return result
+
         elif "SELECT " in table_name:
             q = "SELECT * FROM ({table_name}) LIMIT 1".format(table_name=table_name)
         else:
             quoted_schema  = self.identifier_preparer.format_drill_table(schema + "." + table_name, isFile=False)
             q = "DESCRIBE {table_name}".format(table_name=quoted_schema)
 
-        query_results = connection.execute(q).fetchall()
+        query_results = connection.execute(q)
 
         for row in query_results:
             column = {
@@ -367,51 +366,25 @@ class DrillDialect_sadrill(default.DefaultDialect):
                 "longType": _type_map[row[1]]
             }
             result.append(column)
-
-        print(result)
         return result
 
     def get_plugin_type(self, connection, plugin=None):
-
-        print( "Getting plugin type for: ", plugin)
-
         if plugin is None:
             return
 
-        plugin_type = ""
+        try:
+            query = "SELECT SCHEMA_NAME, TYPE FROM INFORMATION_SCHEMA.`SCHEMATA` WHERE SCHEMA_NAME LIKE '%" + plugin.replace('`','') + "%'"
 
-        # Clean up plugin
-        if plugin.count('.') >= 1:
-            plugin = plugin.replace('`','')
-            plugin_parts = plugin.split('.')
-            plugin = plugin_parts[0]
+            rows = connection.execute(query).fetchall()
+            plugin_type = ""
+            for row in rows:
+                plugin_type = row[1]
+                plugin_name = row[0]
 
-        url = "http://" + self.host + ":" + str(self.port) + "/storage/" + plugin + ".json"
-        print( "Plugin URL:", url)
-        # This check is necessary to determine whether the connection has been created or not
-        if hasattr(connection, 'url'):
-            #self.create_connect_args(connection.url)
+            return plugin_type
 
-            try:
-                # TODO Support SSL
-                r = requests.get(url)
-                json_result = r.json()
-
-                plugin_type = json_result['config']['type']
-                self.plugin_type = plugin_type
-
-                if self.plugin_type == "file":
-                    formats = json_result['config']['formats']
-                    for format in formats.keys():
-                        self.supported_extensions.append(format)
-
-                return plugin_type
-
-            except Exception as ex:
+        except Exception as ex:
                 print("************************************")
                 print("Error in DrillDialect_sadrill.get_plugin_type :: ", str(ex))
                 print("************************************")
                 return False
-        else:
-            return
-

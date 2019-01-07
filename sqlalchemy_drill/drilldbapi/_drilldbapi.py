@@ -29,6 +29,7 @@ class Cursor(object):
         self._connected = True
         self.connection = conn
         self._resultSet = None
+        self._resultSetMetadata = None
         self._resultSetStatus = None
         self.rowcount = -1
 
@@ -140,15 +141,28 @@ class Cursor(object):
                         columns=result.json()["columns"]
                     ).fillna(value=nan)
                 )
+
+                cols = result.json()["columns"]
+                metadata = result.json()["metadata"]
+
+                # Get column metadata
+                column_metadata = []
+                for i in range(0, len(cols)):
+                    col = {
+                        "column": cols[i],
+                        "type": metadata[i]
+                    }
+                    column_metadata.append(col)
+
+                self._resultSetMetadata = column_metadata
                 self.rowcount = len(self._resultSet)
                 self._resultSetStatus = iter(range(len(self._resultSet)))
                 column_names, column_types = self.parse_column_types(self._resultSet)
-
                 try:
                     self.description = tuple(
                         zip(
                             column_names,
-                            column_types,
+                            metadata,
                             [None for i in range(len(self._resultSet.dtypes.index))],
                             [None for i in range(len(self._resultSet.dtypes.index))],
                             [None for i in range(len(self._resultSet.dtypes.index))],
@@ -212,6 +226,10 @@ class Cursor(object):
             print("Catched StopIteration in fetchall")
             print("************************************")
             return None
+
+    @connected
+    def get_query_metadata(self):
+        return self._resultSetMetadata
 
     def get_default_plugin(self):
         return self.default_storage_plugin
@@ -339,7 +357,6 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
             #local_payload["query"] = "USE {}".format(db)
 
             default_storage_plugin = db
-
 
             response = session.post(
                 "{proto}{host}:{port}{url}".format(proto=proto, host=host, port=str(port), url=local_url),
