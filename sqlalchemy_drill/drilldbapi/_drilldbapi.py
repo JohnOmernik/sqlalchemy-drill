@@ -352,11 +352,9 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
             raise AuthError(str(raw_data), response.status_code)
 
         if db is not None:
-            #local_payload = api_globals._PAYLOAD.copy()
-            #local_url = "/query.json"
-            #local_payload["query"] = "USE {}".format(db)
-
-            default_storage_plugin = db
+            local_payload = api_globals._PAYLOAD.copy()
+            local_url = "/query.json"
+            local_payload["query"] = "USE {}".format(db)
 
             response = session.post(
                 "{proto}{host}:{port}{url}".format(proto=proto, host=host, port=str(port), url=local_url),

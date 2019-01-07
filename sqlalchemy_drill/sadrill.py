@@ -100,22 +100,32 @@ _type_map = {
     'bigint': types.BIGINT,
     'BIGINT': types.BIGINT,
     'binary': types.LargeBinary,
+    'BINARY': types.LargeBinary,
     'boolean': types.BOOLEAN,
+    'BOOLEAN': types.BOOLEAN,
     'date': types.DATE,
     'DATE': types.DATE,
     'decimal': types.DECIMAL,
+    'DECIMAL': types.DECIMAL,
     'double': types.FLOAT,
+    'DOUBLE': types.FLOAT,
     'integer': types.INTEGER,
     'INTEGER': types.INTEGER,
     'interval': types.Interval,
+    'INTERVAL': types.Interval,
     'smallint': types.SMALLINT,
+    'SMALLINT': types.SMALLINT,
     'timestamp': types.TIMESTAMP,
     'TIMESTAMP': types.TIMESTAMP,
     'time': types.TIME,
+    'TIME': types.TIME,
     'varchar': types.String,
     'VARCHAR': types.String,
+    'character varying': types.String,
     'CHARACTER VARYING': types.String,
-    'ANY': types.String
+    'ANY': types.String,
+    'any': types.String
+
 }
 
 
@@ -256,12 +266,14 @@ class DrillDialect_sadrill(default.DefaultDialect):
         return self.storage_plugin
 
     def get_table_names(self, connection, schema=None, **kw):
+        if schema is None:
+            schema = connection.engine.url.database
+        # Clean up schema
 
-        if schema is not None:
-            quoted_schema = self.identifier_preparer.format_drill_table(schema)
-        else:
-            return
+        quoted_schema = self.identifier_preparer.format_drill_table(schema)
+        quoted_schema = quoted_schema.replace("/", ".")
 
+        # https://docs.sqlalchemy.org/en/latest/core/connections.html#translation-of-schema-names
         plugin_type = self.get_plugin_type(connection, quoted_schema)
 
         self.plugin_type = plugin_type
@@ -344,8 +356,8 @@ class DrillDialect_sadrill(default.DefaultDialect):
             for row in column_metadata:
                 column = {
                     "name": row[0],
-                    "type": _type_map[row[1]],
-                    "longtype": _type_map[row[1]]
+                    "type": _type_map[row[1].lower()],
+                    "longtype": _type_map[row[1].lower()]
                 }
                 result.append(column)
 
@@ -362,8 +374,8 @@ class DrillDialect_sadrill(default.DefaultDialect):
         for row in query_results:
             column = {
                 "name": row[0],
-                "type": _type_map[row[1]],
-                "longType": _type_map[row[1]]
+                "type": _type_map[row[1].lower()],
+                "longType": _type_map[row[1].lower()]
             }
             result.append(column)
         return result
