@@ -4,6 +4,7 @@ from numpy import nan
 from pandas import DataFrame
 from requests import Session
 from pandas import to_datetime
+import re
 
 from . import api_globals
 from .api_exceptions import Error, Warning, AuthError, DatabaseError, ProgrammingError, CursorClosedException, ConnectionClosedException
@@ -11,7 +12,7 @@ from .api_exceptions import Error, Warning, AuthError, DatabaseError, Programmin
 apilevel = '2.0'
 threadsafety = 3
 paramstyle = 'qmark'
-
+default_storage_plugin = ""
 
 # Python DB API 2.0 classes
 class Cursor(object):
@@ -28,8 +29,10 @@ class Cursor(object):
         self._connected = True
         self.connection = conn
         self._resultSet = None
+        self._resultSetMetadata = None
         self._resultSetStatus = None
         self.rowcount = -1
+
 
     # Decorator for methods which require connection
     def connected(func):
@@ -118,6 +121,14 @@ class Cursor(object):
             self._session
         )
 
+        print("************************************")
+        print("Query:", operation)
+        print("************************************")
+
+        matchObj = re.match('^SHOW FILES FROM\s(.+)', operation, re.IGNORECASE)
+        if matchObj:
+            self.default_storage_plugin = matchObj.group(1)
+
         if result.status_code != 200:
             print("************************************")
             print("Error in Cursor.execute")
@@ -130,15 +141,28 @@ class Cursor(object):
                         columns=result.json()["columns"]
                     ).fillna(value=nan)
                 )
+
+                cols = result.json()["columns"]
+                metadata = result.json()["metadata"]
+
+                # Get column metadata
+                column_metadata = []
+                for i in range(0, len(cols)):
+                    col = {
+                        "column": cols[i],
+                        "type": metadata[i]
+                    }
+                    column_metadata.append(col)
+
+                self._resultSetMetadata = column_metadata
                 self.rowcount = len(self._resultSet)
                 self._resultSetStatus = iter(range(len(self._resultSet)))
                 column_names, column_types = self.parse_column_types(self._resultSet)
-
                 try:
                     self.description = tuple(
                         zip(
                             column_names,
-                            column_types,
+                            metadata,
                             [None for i in range(len(self._resultSet.dtypes.index))],
                             [None for i in range(len(self._resultSet.dtypes.index))],
                             [None for i in range(len(self._resultSet.dtypes.index))],
@@ -156,7 +180,7 @@ class Cursor(object):
     def fetchone(self):
         try:
             # Added Tuple
-            return self._resultSet.ix[next(self._resultSetStatus)]
+            return self._resultSet.iloc[next(self._resultSetStatus)]
         except StopIteration:
             print("************************************")
             print("Catched StopIteration in fetchone")
@@ -202,6 +226,13 @@ class Cursor(object):
             print("Catched StopIteration in fetchall")
             print("************************************")
             return None
+
+    @connected
+    def get_query_metadata(self):
+        return self._resultSetMetadata
+
+    def get_default_plugin(self):
+        return self.default_storage_plugin
 
     def __iter__(self):
         return self._resultSet.iterrows()

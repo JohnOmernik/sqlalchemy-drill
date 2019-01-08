@@ -4,7 +4,9 @@ from __future__ import unicode_literals
 from sqlalchemy import exc, pool, types
 from sqlalchemy.engine import default
 from sqlalchemy.sql import compiler
-from pandas.core.series import Series
+from sqlalchemy import inspect
+import requests
+from pprint import pprint
 
 try:
     from sqlalchemy.sql.compiler import SQLCompiler
@@ -56,6 +58,38 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
     def __init__(self, dialect):
         super(DrillIdentifierPreparer, self).__init__(dialect, initial_quote='`', final_quote='`')
 
+    def format_drill_table(self, schema, isFile=True):
+        formatted_schema = ""
+
+        num_dots = schema.count(".")
+        schema = schema.replace('`', '')
+
+        # For a file, the last section will be the file extension
+        schema_parts = schema.split('.')
+
+        if isFile and num_dots == 3:
+            # Case for File + Workspace
+            plugin = schema_parts[0]
+            workspace = schema_parts[1]
+            table = schema_parts[2] + "." + schema_parts[3]
+            formatted_schema = plugin + ".`" + workspace + "`.`" + table + "`"
+        elif isFile and num_dots == 2:
+            # Case for file and no workspace
+            plugin = schema_parts[0]
+            table = schema_parts[1] + "." + schema_parts[2]
+            formatted_schema = plugin + "`.`" + table + "`"
+        else:
+            # Case for non-file plugins or incomplete schema parts
+            for part in schema_parts:
+                quoted_part = "`" + part + "`"
+                if len(formatted_schema) > 0:
+                    formatted_schema += "." + quoted_part
+                else:
+                    formatted_schema = quoted_part
+
+        return formatted_schema
+
+
 
 try:
     from sqlalchemy.types import BigInteger
@@ -66,20 +100,34 @@ _type_map = {
     'bigint': types.BIGINT,
     'BIGINT': types.BIGINT,
     'binary': types.LargeBinary,
+    'BINARY': types.LargeBinary,
     'boolean': types.BOOLEAN,
+    'BOOLEAN': types.BOOLEAN,
     'date': types.DATE,
     'DATE': types.DATE,
     'decimal': types.DECIMAL,
+    'DECIMAL': types.DECIMAL,
     'double': types.FLOAT,
+    'DOUBLE': types.FLOAT,
+    'int': types.INTEGER,
+    'INT': types.INTEGER,
     'integer': types.INTEGER,
+    'INTEGER': types.INTEGER,
     'interval': types.Interval,
+    'INTERVAL': types.Interval,
     'smallint': types.SMALLINT,
+    'SMALLINT': types.SMALLINT,
     'timestamp': types.TIMESTAMP,
     'TIMESTAMP': types.TIMESTAMP,
     'time': types.TIME,
+    'TIME': types.TIME,
     'varchar': types.String,
+    'VARCHAR': types.String,
+    'character varying': types.String,
     'CHARACTER VARYING': types.String,
-    'ANY': types.String
+    'ANY': types.String,
+    'any': types.String
+
 }
 
 
@@ -116,11 +164,11 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
     def visit_tablesample(self, tablesample, asfrom=False, **kw):
         print(tablesample)
 
-
 class DrillDialect_sadrill(default.DefaultDialect):
 
     name = 'drilldbapi'
     driver = 'rest'
+    dbapi = ""
     preparer = DrillIdentifierPreparer
     statement_compiler = DrillCompiler_sadrill
     poolclass = pool.SingletonThreadPool
@@ -133,8 +181,10 @@ class DrillDialect_sadrill(default.DefaultDialect):
     returns_unicode_strings = True
     description_encoding = None
     supports_native_boolean = True
-    storage_plugin = ""
-    workspace = ""
+
+    def __init__(self, **kw):
+        default.DefaultDialect.__init__(self, **kw)
+        self.supported_extensions = []
 
     @classmethod
     def dbapi(cls):
@@ -142,7 +192,7 @@ class DrillDialect_sadrill(default.DefaultDialect):
         return module
 
     def create_connect_args(self, url, **kwargs):
-        url_port = url.port or 8048
+        url_port = url.port or 8047
         qargs = {'host': url.host, 'port': url_port}
 
         try:
@@ -155,6 +205,14 @@ class DrillDialect_sadrill(default.DefaultDialect):
             self.username = url.username
             self.password = url.password
             self.db = db
+
+
+            # Get Storage Plugin Info:
+            if db_parts[0]:
+                self.storage_plugin = db_parts[0]
+
+            if len(db_parts) > 1:
+                self.workspace = db_parts[1]
 
             qargs.update(url.query)
             qargs['db'] = db
@@ -169,51 +227,28 @@ class DrillDialect_sadrill(default.DefaultDialect):
             print("************************************")
         return [], qargs
 
-    def get_selected_workspace(self):
-        return self.workspace
-
-    def get_selected_storage_plugin(self):
-        return self.storage_plugin
-
-    def has_table(self, connection, table_name, schema=None):
-        try:
-            self.get_columns(connection, table_name, schema)
-            return True
-        except exc.NoSuchTableError:
-            print("************************************")
-            print("Error in DrillDialect_sadrill.has_table :: ", exc.NoSuchTableError)
-            print("************************************")
-            return False
-
-    def get_view_names(self, connection, schema=None, **kw):
-        return []
+    def do_rollback(self, dbapi_connection):
+        # No transactions for Drill
+        pass
 
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
         """Drill has no support for foreign keys.  Returns an empty list."""
+        return []
+
+    def get_indexes(self, connection, table_name, schema=None, **kw):
+        """Drill has no support for indexes.  Returns an empty list. """
         return []
 
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
         """Drill has no support for primary keys.  Retunrs an empty list."""
         return []
 
-    def get_indexes(self, connection, table_name, schema=None, **kw):
-        """Drill has no support for indexes.  Returns an empty list. """
-        return[]
-
-    def do_rollback(self, dbapi_connection):
-        # No transactions for Drill
-        pass
-
-    def _check_unicode_returns(self, connection, additional_tests=None):
-        # requests gives back Unicode strings
-        return True
-
-    def _check_unicode_description(self, connection):
-        # requests gives back Unicode strings
-        return True
-
     def get_schema_names(self, connection, **kw):
-        curs = connection.execute("SHOW SCHEMAS")
+
+        # Get table information
+        query = "SHOW DATABASES"
+
+        curs = connection.execute(query)
         result = []
         try:
             for row in curs:
@@ -226,44 +261,144 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         return tuple(result)
 
-    def get_table_names(self, connection, schema=None, **kw):
-        curs = connection.execute("SHOW FILES FROM {0}".format(self.db))
-        tables_names = []
-        try:
-            for row in curs:
-                if row.name.find(".view.drill") >= 0:
-                    myname = row.name.replace(".view.drill", "")
-                else:
-                    myname = row.name
-                tables_names.append(myname)
+    def get_selected_workspace(self):
+        return self.workspace
 
-        except Exception as ex:
+    def get_selected_storage_plugin(self):
+        return self.storage_plugin
+
+    def get_table_names(self, connection, schema=None, **kw):
+        if schema is None:
+            schema = connection.engine.url.database
+        # Clean up schema
+
+        quoted_schema = self.identifier_preparer.format_drill_table(schema)
+        quoted_schema = quoted_schema.replace("/", ".")
+
+        # https://docs.sqlalchemy.org/en/latest/core/connections.html#translation-of-schema-names
+        plugin_type = self.get_plugin_type(connection, quoted_schema)
+
+        self.plugin_type = plugin_type
+        self.quoted_schema = quoted_schema
+
+        if plugin_type == 'file':
+            curs = connection.execute("SHOW FILES FROM " + quoted_schema)
+            tables_names = []
+            try:
+                for row in curs:
+                    if row.name.find(".view.drill") >= 0:
+                        myname = row.name.replace(".view.drill", "")
+                    else:
+                        myname = row.name
+                    tables_names.append(myname)
+
+            except Exception as ex:
+                print("************************************")
+                print("Error in DrillDialect_sadrill.get_table_names :: ", str(ex))
+                print("************************************")
+            return tuple(tables_names)
+        else:
+            curs = connection.execute(
+                "SELECT `TABLE_NAME` AS name FROM INFORMATION_SCHEMA.`TABLES` WHERE `TABLE_SCHEMA` = '" + schema + "'")
+            tables_names = []
+            try:
+                for row in curs:
+                    if row.name.find(".view.drill") >= 0:
+                        myname = row.name.replace(".view.drill", "")
+                    else:
+                        myname = row.name
+                    tables_names.append(myname)
+
+            except Exception as ex:
+                print("************************************")
+                print("Error in DrillDialect_sadrill.get_table_names :: ", str(ex))
+                print("************************************")
+            return tuple(tables_names)
+
+    def get_view_names(self, connection, schema=None, **kw):
+        return []
+
+    def has_table(self, connection, table_name, schema=None):
+        try:
+            self.get_columns(connection, table_name, schema)
+            return True
+        except exc.NoSuchTableError:
             print("************************************")
-            print("Error in DrillDialect_sadrill.get_table_names :: ", str(ex))
+            print("Error in DrillDialect_sadrill.has_table :: ", exc.NoSuchTableError)
             print("************************************")
-        return tuple(tables_names)
+            return False
+
+    def _check_unicode_returns(self, connection, additional_tests=None):
+        # requests gives back Unicode strings
+        return True
+
+    def _check_unicode_description(self, connection):
+        # requests gives back Unicode strings
+        return True
+
+    def object_as_dict(obj):
+        return {c.key: getattr(obj, c.key)
+                for c in inspect(obj).mapper.column_attrs}
 
     def get_columns(self, connection, table_name, schema=None, **kw):
+
+        if "@@@" in table_name:
+            table_name = table_name.replace("@@@", ".")
+
         result = []
-        if "SELECT " in table_name:
-            q = "SELECT * FROM ({table_name}) LIMIT 1".format(table_name=table_name)
-        else:
-            q = "DESCRIBE {table_name}".format(table_name=table_name)
 
-        cursor = connection.execute(q)
+        plugin_type = self.get_plugin_type(connection, schema)
 
-        for col in cursor:
-            if len(col) > 0:
-                cname = col[1].get('Name', "")
-                dtype = str(col[1].get('dtype', 'ANY'))
-                ctype = _type_map.get(dtype, _type_map['ANY'])
-                bisnull = True
+        if plugin_type == "file":
+            file_name = schema + "." + table_name
+            quoted_file_name = self.identifier_preparer.format_drill_table(file_name, isFile=True)
+            q = "SELECT * FROM {file_name} LIMIT 1".format(file_name=quoted_file_name)
+            column_metadata = connection.execute(q).cursor.description
+
+            for row in column_metadata:
                 column = {
-                    "name": cname,
-                    "type": ctype,
-                    "default": None,
-                    "autoincrement": None,
-                    "nullable": bisnull,
+                    "name": row[0],
+                    "type": _type_map[row[1].lower()],
+                    "longtype": _type_map[row[1].lower()]
                 }
                 result.append(column)
+
+            return result
+
+        elif "SELECT " in table_name:
+            q = "SELECT * FROM ({table_name}) LIMIT 1".format(table_name=table_name)
+        else:
+            quoted_schema  = self.identifier_preparer.format_drill_table(schema + "." + table_name, isFile=False)
+            q = "DESCRIBE {table_name}".format(table_name=quoted_schema)
+
+        query_results = connection.execute(q)
+
+        for row in query_results:
+            column = {
+                "name": row[0],
+                "type": _type_map[row[1].lower()],
+                "longType": _type_map[row[1].lower()]
+            }
+            result.append(column)
         return result
+
+    def get_plugin_type(self, connection, plugin=None):
+        if plugin is None:
+            return
+
+        try:
+            query = "SELECT SCHEMA_NAME, TYPE FROM INFORMATION_SCHEMA.`SCHEMATA` WHERE SCHEMA_NAME LIKE '%" + plugin.replace('`','') + "%'"
+
+            rows = connection.execute(query).fetchall()
+            plugin_type = ""
+            for row in rows:
+                plugin_type = row[1]
+                plugin_name = row[0]
+
+            return plugin_type
+
+        except Exception as ex:
+                print("************************************")
+                print("Error in DrillDialect_sadrill.get_plugin_type :: ", str(ex))
+                print("************************************")
+                return False
