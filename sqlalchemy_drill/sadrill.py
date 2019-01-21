@@ -126,7 +126,9 @@ _type_map = {
     'character varying': types.String,
     'CHARACTER VARYING': types.String,
     'ANY': types.String,
-    'any': types.String
+    'any': types.String,
+    'map': types.UserDefinedType,
+    'MAP': types.UserDefinedType
 
 }
 

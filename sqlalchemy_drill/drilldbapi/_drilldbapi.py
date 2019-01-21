@@ -347,14 +347,15 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
         raw_data = response.text
         if raw_data.find("Invalid username/password credentials") >= 0:
             print("************************************")
-            print("Error in connect")
+            print("Error in connect: ", response.text)
             print("************************************")
             raise AuthError(str(raw_data), response.status_code)
 
         if db is not None:
             local_payload = api_globals._PAYLOAD.copy()
             local_url = "/query.json"
-            local_payload["query"] = "USE {}".format(db)
+            #local_payload["query"] = "USE {}".format(db)
+            local_payload["query"] = "SELECT 'test' FROM (VALUES(1))"
 
             response = session.post(
                 "{proto}{host}:{port}{url}".format(proto=proto, host=host, port=str(port), url=local_url),
@@ -365,6 +366,7 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
             if response.status_code != 200:
                 print("************************************")
                 print("Error in connect")
+                print( "Response code:", response.status_code)
                 print("************************************")
                 raise DatabaseError(str(response.json()["errorMessage"]), response.status_code)
 
