@@ -97,6 +97,8 @@ except ImportError:
     from sqlalchemy.databases.mysql import MSBigInteger as BigInteger
 
 _type_map = {
+    'bit': types.BOOLEAN,
+    'BIT': types.BOOLEAN,
     'bigint': types.BIGINT,
     'BIGINT': types.BIGINT,
     'binary': types.LargeBinary,
@@ -129,7 +131,6 @@ _type_map = {
     'any': types.String,
     'map': types.UserDefinedType,
     'MAP': types.UserDefinedType
-
 }
 
 
@@ -346,7 +347,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
         if "@@@" in table_name:
             table_name = table_name.replace("@@@", ".")
-
         result = []
 
         plugin_type = self.get_plugin_type(connection, schema)
@@ -364,7 +364,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
                     "longtype": _type_map[row[1].lower()]
                 }
                 result.append(column)
-
             return result
 
         elif "SELECT " in table_name:
