@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from __future__ import absolute_import
 from __future__ import unicode_literals
 from sqlalchemy import exc, pool, types
@@ -7,21 +6,163 @@ from sqlalchemy.sql import compiler
 from sqlalchemy import inspect
 import requests
 from pprint import pprint
-from .base import DrillDialect, DrillIdentifierPreparer, DrillCompiler_sadrill, _type_map
 
 try:
     from sqlalchemy.sql.compiler import SQLCompiler
 except ImportError:
     from sqlalchemy.sql.compiler import DefaultCompiler as SQLCompiler
 
+_type_map = {
+    'bit': types.BOOLEAN,
+    'BIT': types.BOOLEAN,
+    'bigint': types.BIGINT,
+    'BIGINT': types.BIGINT,
+    'binary': types.LargeBinary,
+    'BINARY': types.LargeBinary,
+    'boolean': types.BOOLEAN,
+    'BOOLEAN': types.BOOLEAN,
+    'date': types.DATE,
+    'DATE': types.DATE,
+    'decimal': types.DECIMAL,
+    'DECIMAL': types.DECIMAL,
+    'double': types.FLOAT,
+    'DOUBLE': types.FLOAT,
+    'int': types.INTEGER,
+    'INT': types.INTEGER,
+    'integer': types.INTEGER,
+    'INTEGER': types.INTEGER,
+    'interval': types.Interval,
+    'INTERVAL': types.Interval,
+    'smallint': types.SMALLINT,
+    'SMALLINT': types.SMALLINT,
+    'timestamp': types.TIMESTAMP,
+    'TIMESTAMP': types.TIMESTAMP,
+    'time': types.TIME,
+    'TIME': types.TIME,
+    'varchar': types.String,
+    'VARCHAR': types.String,
+    'character varying': types.String,
+    'CHARACTER VARYING': types.String,
+    'ANY': types.String,
+    'any': types.String,
+    'map': types.UserDefinedType,
+    'MAP': types.UserDefinedType,
+    'list': types.UserDefinedType,
+    'LIST': types.UserDefinedType
+}
 
-try:
-    from sqlalchemy.types import BigInteger
-except ImportError:
-    from sqlalchemy.databases.mysql import MSBigInteger as BigInteger
+class DrillCompiler_sadrill(compiler.SQLCompiler):
 
-class DrillDialect_sadrill(DrillDialect):
+    def default_from(self):
+        """Called when a ``SELECT`` statement has no froms,
+        and no ``FROM`` clause is to be appended.
+       Drill uses FROM values(1)
+        """
+        return " FROM (values(1))"
 
+    def visit_char_length_func(self, fn, **kw):
+        return 'length{}'.format(self.function_argspec(fn, **kw))
+
+    def visit_table(self, table, asfrom=False, **kwargs):
+
+        if asfrom:
+            try:
+                fixed_schema = ""
+                if table.schema != "":
+                    fixed_schema = ".".join(["`{i}`".format(i=i.replace('`', '')) for i in table.schema.split(".")])
+                fixed_table = "{fixed_schema}.`{table_name}`".format(
+                    fixed_schema=fixed_schema,table_name=table.name.replace("`", "")
+                )
+                return fixed_table
+            except Exception as ex:
+                print("************************************")
+                print("Error in DrillCompiler_sadrill.visit_table :: ", str(ex))
+                print("************************************")
+        else:
+            return ""
+
+    def visit_tablesample(self, tablesample, asfrom=False, **kw):
+        print(tablesample)
+
+
+class DrillIdentifierPreparer(compiler.IdentifierPreparer):
+    reserved_words = compiler.RESERVED_WORDS.copy()
+    reserved_words.update(
+        [
+            'abs', 'all', 'allocate', 'allow', 'alter', 'and', 'any', 'are', 'array', 'as', 'asensitive',
+            'asymmetric', 'at', 'atomic', 'authorization', 'avg', 'begin', 'between', 'bigint', 'binary',
+            'bit', 'blob', 'boolean', 'both', 'by', 'call', 'called', 'cardinality', 'cascaded', 'case',
+            'cast', 'ceil', 'ceiling', 'char', 'character', 'character_length', 'char_length', 'check',
+            'clob', 'close', 'coalesce', 'collate', 'collect', 'column', 'commit', 'condition', 'connect',
+            'constraint', 'convert', 'corr', 'corresponding', 'count', 'covar_pop', 'covar_samp', 'create',
+            'cross', 'cube', 'cume_dist', 'current', 'current_catalog', 'current_date',
+            'current_default_transform_group', 'current_path', 'current_role', 'current_schema', 'current_time',
+            'current_timestamp', 'current_transform_group_for_type', 'current_user', 'cursor', 'cycle',
+            'databases', 'date', 'day', 'deallocate', 'dec', 'decimal', 'declare', 'default', 'default_kw',
+            'delete', 'dense_rank', 'deref', 'describe', 'deterministic', 'disallow', 'disconnect', 'distinct',
+            'double', 'drop', 'dynamic', 'each', 'element', 'else', 'end', 'end_exec', 'escape', 'every', 'except',
+            'exec', 'execute', 'exists', 'exp', 'explain', 'external', 'extract', 'false', 'fetch', 'files', 'filter',
+            'first_value', 'float', 'floor', 'for', 'foreign', 'free', 'from', 'full', 'function', 'fusion', 'get',
+            'global', 'grant', 'group', 'grouping', 'having', 'hold', 'hour', 'identity', 'if', 'import', 'in',
+            'indicator', 'inner', 'inout', 'insensitive', 'insert', 'int', 'integer', 'intersect', 'intersection',
+            'interval', 'into', 'is', 'jar', 'join', 'language', 'large', 'last_value', 'lateral', 'leading', 'left',
+            'like', 'limit', 'ln', 'local', 'localtime', 'localtimestamp', 'lower', 'match', 'max', 'member', 'merge',
+            'method', 'min', 'minute', 'mod', 'modifies', 'module', 'month', 'multiset', 'national', 'natural',
+            'nchar', 'nclob', 'new', 'no', 'none', 'normalize', 'not', 'null', 'nullif', 'numeric', 'octet_length',
+            'of', 'offset', 'old', 'on', 'only', 'open', 'or', 'order', 'out', 'outer', 'over', 'overlaps', 'overlay',
+            'parameter', 'partition', 'percentile_cont', 'percentile_disc', 'percent_rank', 'position', 'power',
+            'precision', 'prepare', 'primary', 'procedure', 'range', 'rank', 'reads', 'real', 'recursive', 'ref',
+            'references', 'referencing', 'regr_avgx', 'regr_avgy', 'regr_count', 'regr_intercept', 'regr_r2',
+            'regr_slope', 'regr_sxx', 'regr_sxy', 'release', 'replace', 'result', 'return', 'returns', 'revoke',
+            'right', 'rollback', 'rollup', 'row', 'rows', 'row_number', 'savepoint', 'schemas', 'scope', 'scroll',
+            'search', 'second', 'select', 'sensitive', 'session_user', 'set', 'show', 'similar', 'smallint', 'some',
+            'specific', 'specifictype', 'sql', 'sqlexception', 'sqlstate', 'sqlwarning', 'sqrt', 'start', 'static',
+            'stddev_pop', 'stddev_samp', 'submultiset', 'substring', 'sum', 'symmetric', 'system', 'system_user',
+            'table', 'tables', 'tablesample', 'then', 'time', 'timestamp', 'timezone_hour', 'timezone_minute',
+            'tinyint', 'to', 'trailing', 'translate', 'translation', 'treat', 'trigger', 'trim', 'true', 'uescape',
+            'union', 'unique', 'unknown', 'unnest', 'update', 'upper', 'use', 'user', 'using', 'value', 'values',
+            'varbinary', 'varchar', 'varying', 'var_pop', 'var_samp', 'when', 'whenever', 'where', 'width_bucket',
+            'window', 'with', 'within', 'without', 'year'
+        ]
+    )
+
+    def __init__(self, dialect):
+        super(DrillIdentifierPreparer, self).__init__(dialect, initial_quote='`', final_quote='`')
+
+    def format_drill_table(self, schema, isFile=True):
+        formatted_schema = ""
+
+        num_dots = schema.count(".")
+        schema = schema.replace('`', '')
+
+        # For a file, the last section will be the file extension
+        schema_parts = schema.split('.')
+
+        if isFile and num_dots == 3:
+            # Case for File + Workspace
+            plugin = schema_parts[0]
+            workspace = schema_parts[1]
+            table = schema_parts[2] + "." + schema_parts[3]
+            formatted_schema = plugin + ".`" + workspace + "`.`" + table + "`"
+        elif isFile and num_dots == 2:
+            # Case for file and no workspace
+            plugin = schema_parts[0]
+            table = schema_parts[1] + "." + schema_parts[2]
+            formatted_schema = plugin + "`.`" + table + "`"
+        else:
+            # Case for non-file plugins or incomplete schema parts
+            for part in schema_parts:
+                quoted_part = "`" + part + "`"
+                if len(formatted_schema) > 0:
+                    formatted_schema += "." + quoted_part
+                else:
+                    formatted_schema = quoted_part
+
+        return formatted_schema
+
+
+
+class DrillDialect(default.DefaultDialect):
     name = 'drilldbapi'
     driver = 'rest'
     dbapi = ""
@@ -61,7 +202,6 @@ class DrillDialect_sadrill(DrillDialect):
             self.username = url.username
             self.password = url.password
             self.db = db
-
 
             # Get Storage Plugin Info:
             if db_parts[0]:
@@ -222,7 +362,7 @@ class DrillDialect_sadrill(DrillDialect):
         elif "SELECT " in table_name:
             q = "SELECT * FROM ({table_name}) LIMIT 1".format(table_name=table_name)
         else:
-            quoted_schema  = self.identifier_preparer.format_drill_table(schema + "." + table_name, isFile=False)
+            quoted_schema = self.identifier_preparer.format_drill_table(schema + "." + table_name, isFile=False)
             q = "DESCRIBE {table_name}".format(table_name=quoted_schema)
 
         query_results = connection.execute(q)
@@ -241,7 +381,8 @@ class DrillDialect_sadrill(DrillDialect):
             return
 
         try:
-            query = "SELECT SCHEMA_NAME, TYPE FROM INFORMATION_SCHEMA.`SCHEMATA` WHERE SCHEMA_NAME LIKE '%" + plugin.replace('`','') + "%'"
+            query = "SELECT SCHEMA_NAME, TYPE FROM INFORMATION_SCHEMA.`SCHEMATA` WHERE SCHEMA_NAME LIKE '%" + plugin.replace(
+                '`', '') + "%'"
 
             rows = connection.execute(query).fetchall()
             plugin_type = ""
@@ -252,7 +393,7 @@ class DrillDialect_sadrill(DrillDialect):
             return plugin_type
 
         except Exception as ex:
-                print("************************************")
-                print("Error in DrillDialect_sadrill.get_plugin_type :: ", str(ex))
-                print("************************************")
-                return False
+            print("************************************")
+            print("Error in DrillDialect_sadrill.get_plugin_type :: ", str(ex))
+            print("************************************")
+            return False
