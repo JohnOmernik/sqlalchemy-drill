@@ -5,6 +5,7 @@ from sqlalchemy import exc, pool, types
 from sqlalchemy.engine import default
 from sqlalchemy.sql import compiler
 from sqlalchemy import inspect
+import pathlib
 import requests
 from pprint import pprint
 
@@ -55,40 +56,34 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
         ]
     )
 
+    supported_file_extensions = [".csv",".txt",".avro",".json",".parquet",".tsv",".psv"]
+
     def __init__(self, dialect):
         super(DrillIdentifierPreparer, self).__init__(dialect, initial_quote='`', final_quote='`')
 
     def format_drill_table(self, schema, isFile=True):
-        formatted_schema = ""
 
-        num_dots = schema.count(".")
         schema = schema.replace('`', '')
 
-        # For a file, the last section will be the file extension
         schema_parts = schema.split('.')
 
-        if isFile and num_dots == 3:
-            # Case for File + Workspace
-            plugin = schema_parts[0]
-            workspace = schema_parts[1]
-            table = schema_parts[2] + "." + schema_parts[3]
-            formatted_schema = plugin + ".`" + workspace + "`.`" + table + "`"
-        elif isFile and num_dots == 2:
-            # Case for file and no workspace
-            plugin = schema_parts[0]
-            table = schema_parts[1] + "." + schema_parts[2]
-            formatted_schema = plugin + "`.`" + table + "`"
+        if isFile:
+
+            extension = pathlib.Path(schema).suffix
+            
+            if not extension.lower() in self.supported_file_extensions:
+                print("file system based schema encountered (perhaps a query on a directory/table ? ) ")
+                return ".".join(["`" + x + "`" for x in schema_parts])
+            else:
+                print("file extension exists in supported types ")
+                plugin = schema_parts[0]
+                workspace = schema_parts[1]
+                table = ".".join(schema_parts[2:])
+                return "`" + plugin + "`" + ".`" + workspace + "`.`" + table + "`"
+
         else:
-            # Case for non-file plugins or incomplete schema parts
-            for part in schema_parts:
-                quoted_part = "`" + part + "`"
-                if len(formatted_schema) > 0:
-                    formatted_schema += "." + quoted_part
-                else:
-                    formatted_schema = quoted_part
-
-        return formatted_schema
-
+            print("not a file based schema ")
+            return ".".join(["`" + part + "`" for part in schema_parts])
 
 
 try:
@@ -345,8 +340,6 @@ class DrillDialect_sadrill(default.DefaultDialect):
 
     def get_columns(self, connection, table_name, schema=None, **kw):
 
-        if "@@@" in table_name:
-            table_name = table_name.replace("@@@", ".")
         result = []
 
         plugin_type = self.get_plugin_type(connection, schema)

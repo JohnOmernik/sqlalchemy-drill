@@ -26,11 +26,12 @@ setup(name='sqlalchemy_drill',
       install_requires=[
         "requests",
         "numpy",
-        "pandas"
+        "pandas",
+        "sqlalchemy"
       ],
       keywords='SQLAlchemy Apache Drill',
-      author='John Omernik, Charles Givre, Davide Miceli, Massimo Martiradonna',
-      author_email='john@omernik.com, cgivre@thedataist.com, davide.miceli.dap@gmail.com, massimo.martiradonna.dap@gmail.com',
+      author='John Omernik, Charles Givre, Davide Miceli, Massimo Martiradonna, Bhargava Vadlamani',
+      author_email='john@omernik.com, cgivre@thedataist.com, davide.miceli.dap@gmail.com, massimo.martiradonna.dap@gmail.com,vadlamani1729@gmail.com',
       license='Apache',
       packages=find_packages(),
       include_package_data=True,
