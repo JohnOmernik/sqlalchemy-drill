@@ -130,7 +130,9 @@ _type_map = {
     'ANY': types.String,
     'any': types.String,
     'map': types.UserDefinedType,
-    'MAP': types.UserDefinedType
+    'MAP': types.UserDefinedType,
+    'list': types.UserDefinedType,
+    'LIST': types.UserDefinedType
 }
 
 
