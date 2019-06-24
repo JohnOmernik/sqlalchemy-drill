@@ -5,6 +5,7 @@ from sqlalchemy.engine import default
 from sqlalchemy.sql import compiler
 from sqlalchemy import inspect
 import requests
+import re
 from pprint import pprint
 
 try:
@@ -48,7 +49,9 @@ _type_map = {
     'map': types.UserDefinedType,
     'MAP': types.UserDefinedType,
     'list': types.UserDefinedType,
-    'LIST': types.UserDefinedType
+    'LIST': types.UserDefinedType,
+    'float8': types.FLOAT,
+    'FLOAT8': types.FLOAT
 }
 
 class DrillCompiler_sadrill(compiler.SQLCompiler):
@@ -337,9 +340,6 @@ class DrillDialect(default.DefaultDialect):
                 for c in inspect(obj).mapper.column_attrs}
 
     def get_columns(self, connection, table_name, schema=None, **kw):
-
-        if "@@@" in table_name:
-            table_name = table_name.replace("@@@", ".")
         result = []
 
         plugin_type = self.get_plugin_type(connection, schema)
@@ -351,10 +351,18 @@ class DrillDialect(default.DefaultDialect):
             column_metadata = connection.execute(q).cursor.description
 
             for row in column_metadata:
+
+                #  Get rid of precision information in data types
+                data_type = row[1].lower()
+                pattern = r"[a-zA-Z]+\(\d+, \d+\)"
+
+                if re.search(pattern, data_type):
+                    data_type = data_type.split('(')[0]
+
                 column = {
                     "name": row[0],
-                    "type": _type_map[row[1].lower()],
-                    "longtype": _type_map[row[1].lower()]
+                    "type": _type_map[data_type],
+                    "longtype": _type_map[data_type]
                 }
                 result.append(column)
             return result
