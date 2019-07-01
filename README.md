@@ -52,6 +52,6 @@ to drillpy and pydrill for code used in creating the `drilldbapi.py` code for co
 Get the superset repo and then in
 ```
 FROM supersetimage(not sure it's name)
-RUN git clone https://github.com/JohnOmernik/sqlalchemy-drill && cd sqlalchemy-drill && python3 setup.py install 
+RUN pip install git+https://github.com/JohnOmernik/sqlalchemy-drill.git
 CMD["superset"]
 ```
