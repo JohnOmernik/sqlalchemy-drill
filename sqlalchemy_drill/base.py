@@ -34,43 +34,24 @@ except ImportError:
 
 _type_map = {
     'bit': types.BOOLEAN,
-    'BIT': types.BOOLEAN,
     'bigint': types.BIGINT,
-    'BIGINT': types.BIGINT,
     'binary': types.LargeBinary,
-    'BINARY': types.LargeBinary,
     'boolean': types.BOOLEAN,
-    'BOOLEAN': types.BOOLEAN,
     'date': types.DATE,
-    'DATE': types.DATE,
     'decimal': types.DECIMAL,
-    'DECIMAL': types.DECIMAL,
     'double': types.FLOAT,
-    'DOUBLE': types.FLOAT,
     'int': types.INTEGER,
-    'INT': types.INTEGER,
     'integer': types.INTEGER,
-    'INTEGER': types.INTEGER,
     'interval': types.Interval,
-    'INTERVAL': types.Interval,
     'smallint': types.SMALLINT,
-    'SMALLINT': types.SMALLINT,
     'timestamp': types.TIMESTAMP,
-    'TIMESTAMP': types.TIMESTAMP,
     'time': types.TIME,
-    'TIME': types.TIME,
     'varchar': types.String,
-    'VARCHAR': types.String,
     'character varying': types.String,
-    'CHARACTER VARYING': types.String,
-    'ANY': types.String,
     'any': types.String,
     'map': types.UserDefinedType,
-    'MAP': types.UserDefinedType,
     'list': types.UserDefinedType,
-    'LIST': types.UserDefinedType,
     'float8': types.FLOAT,
-    'FLOAT8': types.FLOAT
 }
 
 class DrillCompiler_sadrill(compiler.SQLCompiler):
@@ -424,3 +405,4 @@ class DrillDialect(default.DefaultDialect):
             print("Error in DrillDialect_sadrill.get_plugin_type :: ", str(ex))
             print("************************************")
             return False
+
