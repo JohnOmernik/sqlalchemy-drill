@@ -26,11 +26,14 @@ from sqlalchemy.engine import default
 from sqlalchemy.sql import compiler
 from sqlalchemy import inspect
 import re
+import logging
 
 try:
     from sqlalchemy.sql.compiler import SQLCompiler
 except ImportError:
     from sqlalchemy.sql.compiler import DefaultCompiler as SQLCompiler
+
+logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.ERROR)
 
 _type_map = {
     'bit': types.BOOLEAN,
@@ -78,9 +81,8 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
                 )
                 return fixed_table
             except Exception as ex:
-                print("************************************")
-                print("Error in DrillCompiler_sadrill.visit_table :: ", str(ex))
-                print("************************************")
+                logging.error( "Error in DrillCompiler_sadrill.visit_table :: " + str(ex))
+
         else:
             return ""
 
@@ -221,9 +223,8 @@ class DrillDialect(default.DefaultDialect):
                 if url.password:
                     qargs['drillpass'] = url.password
         except Exception as ex:
-            print("************************************")
-            print("Error in DrillDialect_sadrill.create_connect_args :: ", str(ex))
-            print("************************************")
+            logging.error("Error in DrillDialect_sadrill.create_connect_args :: " + str(ex))
+
         return [], qargs
 
     def do_rollback(self, dbapi_connection):
@@ -254,9 +255,7 @@ class DrillDialect(default.DefaultDialect):
                 if row.SCHEMA_NAME != "cp.default" and row.SCHEMA_NAME != "INFORMATION_SCHEMA":
                     result.append(row.SCHEMA_NAME)
         except Exception as ex:
-            print("************************************")
-            print("Error in DrillDialect_sadrill.get_schema_names :: ", str(ex))
-            print("************************************")
+            logging.error(("Error in DrillDialect_sadrill.get_schema_names :: ", str(ex)))
 
         return tuple(result)
 
@@ -292,9 +291,8 @@ class DrillDialect(default.DefaultDialect):
                     tables_names.append(myname)
 
             except Exception as ex:
-                print("************************************")
-                print("Error in DrillDialect_sadrill.get_table_names :: ", str(ex))
-                print("************************************")
+                logging.error("Error in DrillDialect_sadrill.get_table_names :: " + str(ex))
+
             return tuple(tables_names)
         else:
             curs = connection.execute(
@@ -309,9 +307,8 @@ class DrillDialect(default.DefaultDialect):
                     tables_names.append(myname)
 
             except Exception as ex:
-                print("************************************")
-                print("Error in DrillDialect_sadrill.get_table_names :: ", str(ex))
-                print("************************************")
+                logging.error("Error in DrillDialect_sadrill.get_table_names :: " + str(ex))
+
             return tuple(tables_names)
 
     def get_view_names(self, connection, schema=None, **kw):
@@ -322,9 +319,7 @@ class DrillDialect(default.DefaultDialect):
             self.get_columns(connection, table_name, schema)
             return True
         except exc.NoSuchTableError:
-            print("************************************")
-            print("Error in DrillDialect_sadrill.has_table :: ", exc.NoSuchTableError)
-            print("************************************")
+            logging.error("Error in DrillDialect_sadrill.has_table :: " + exc.NoSuchTableError)
             return False
 
     def _check_unicode_returns(self, connection, additional_tests=None):
@@ -401,8 +396,6 @@ class DrillDialect(default.DefaultDialect):
             return plugin_type
 
         except Exception as ex:
-            print("************************************")
-            print("Error in DrillDialect_sadrill.get_plugin_type :: ", str(ex))
-            print("************************************")
+            logging.error("Error in DrillDialect_sadrill.get_plugin_type :: " + str(ex))
             return False
 
