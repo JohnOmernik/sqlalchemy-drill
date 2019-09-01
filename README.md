@@ -32,6 +32,28 @@ To connect to Drill running on a local machine running in embedded mode you can 
 drill+sadrill://localhost:8047/dfs?use_ssl=False
 ```
 
+## Usage with JDBC
+Connecting to Drill via JDBC is a little more complicated than a local installation and complete instructions can be found on the Drill documentation here: https://drill.apache.org/docs/using-the-jdbc-driver/.
+
+In order to configure SQLAlchemy to work with Drill via JDBC you must:
+* Download the latest JDBC Driver available here: http://apache.osuosl.org/drill/
+* Copy this driver to your classpath or other known path
+* Set an environment variable called `DRILL_JDBC_DRIVER_PATH` to the full path of your driver location
+* Set an environment variable called `DRILL_JDBC_JAR_NAME` to the name of the `.jar` file for the Drill driver.
+
+Additionally, you will need to install `JayDeBeApi` as well as jPype version 0.6.3.  
+These modules are listed as optional dependencies and will not be installed by the default installer. 
+
+If the JDBC driver is not available, the dialect will throw errors when trying to connect.
+
+```
+drill+jdbc://<username>:<passsword>@<host>:<port>
+```
+For a simple installation, this might look like:
+```
+drill+jdbc://admin:password@localhost:31010
+```
+
 ## Usage with Superset
 For a complete tutorial on how to use Superset with Drill, read the tutorial on @cgivre's blog available here: http://thedataist.com/visualize-anything-with-superset-and-drill/.
 
@@ -40,10 +62,8 @@ For a complete tutorial on how to use Superset with Drill, read the tutorial on 
 Currently we can connect to drill, and issue queries for most visualizations and get results. We also enumerate table columns for some times of tables. Here are things that are working as some larger issues to work out. (Individual issues are tracked under issues)
 
 * Connection to Drill via the databases tab in Superset succeeds
-  * Table lists in the connection for some reason only show the first two qualifiers of drill tables.  So if in the schema dfs.root you have two tables, table1 and table2, instead of showing table1 and table2 or dfs.root.table1 and dfs.root.table2, it will just show dfs.root and dfs.root.  This is tracked in issue: https://github.com/JohnOmernik/sqlalchemy-drill/issues/3
 * You can do basic queries for most types of viz/tables
 * There may be issues with advanced queries/joins. As you learn about new ones, please track in issues
-
 
 ### Many thanks
 to drillpy and pydrill for code used in creating the `drilldbapi.py` code for connecting!

@@ -1,4 +1,24 @@
-# -*- coding: utf-8 -*-
+# This is the MIT license: http://www.opensource.org/licenses/mit-license.php
+#
+# Copyright (c) 2005-2012 the SQLAlchemy authors and contributors <see AUTHORS file>.
+# SQLAlchemy is a trademark of Michael Bayer.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this
+# software and associated documentation files (the "Software"), to deal in the Software
+# without restriction, including without limitation the rights to use, copy, modify, merge,
+# publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
+# to whom the Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all copies or
+# substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+# PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+# FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+# OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
 from __future__ import absolute_import
 from __future__ import unicode_literals
 from sqlalchemy import exc, pool, types
@@ -6,10 +26,10 @@ from sqlalchemy.engine import default
 from sqlalchemy.sql import compiler
 
 from sqlalchemy import inspect
-import requests
 import jaydebeapi
+import os
 import logging
-from .base import DrillDialect, DrillIdentifierPreparer, DrillCompiler_sadrill
+from .base import DrillDialect, DrillCompiler_sadrill
 
 
 class DrillDialect_jdbc(DrillDialect):
@@ -20,11 +40,21 @@ class DrillDialect_jdbc(DrillDialect):
 
     def __init__(self, *args, **kwargs):
         super(DrillDialect_jdbc, self).__init__(*args, **kwargs)
+        self.jdbc_driver_path = os.environ.get('DRILL_JDBC_DRIVER_PATH')
+        self.jdbc_jar_name = os.environ.get('DRILL_JDBC_JAR_NAME')
+
+        if self.jdbc_driver_path is None:
+            raise Exception('To connect to Drill via JDBC, you must set the DRILL_JDBC_DRIVER path to the location of the Drill JDBC driver.')
+
+        if self.jdbc_jar_name is None:
+            raise Exception(
+                'To connect to Drill via JDBC, you must set the DRILL_JDBC_JAR_NAME environment variable.')
 
     def initialize(self, connection):
         super(DrillDialect_jdbc, self).initialize(connection)
 
-    """Open a connection to a database using a JDBC driver and return
+    """
+    Open a connection to a database using a JDBC driver and return
         a Connection instance.
         jclassname: Full qualified Java class name of the JDBC driver.
         url: Database url as required by the JDBC driver.
@@ -42,11 +72,7 @@ class DrillDialect_jdbc(DrillDialect):
     def create_connect_args(self, url):
         if url is not None:
             params = super(DrillDialect, self).create_connect_args(url)[1]
-
-            # TODO Remove Hard Coded Driver
-            drill_path = "/Users/cgivre/github/drill-dev/drill/distribution/target/apache-drill-1.16.0-SNAPSHOT/apache-drill-1.16.0-SNAPSHOT/jars/jdbc-driver/"
-            driver_name = "drill-jdbc-all-1.16.0-SNAPSHOT.jar"
-            driver = drill_path + driver_name
+            driver = self.jdbc_driver_path + self.jdbc_jar_name
 
             cargs = (self.jdbc_driver_name,
                      self._create_jdbc_url(url),
