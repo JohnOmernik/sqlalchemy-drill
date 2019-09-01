@@ -4,9 +4,18 @@ import re
 
 from setuptools import setup, find_packages
 
+def download_jdbc_driver():
+    classpath = os.environ['CLASSPATH']
+
+
 v = open(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'sqlalchemy_drill', '__init__.py'))
 VERSION = re.compile(r".*__version__ = '(.*?)'", re.S).match(v.read()).group(1)
 v.close()
+
+if "--install_jdbc_driver" in sys.argv:
+    download_jdbc_driver()
+    sys.argv.remove("--install_jdbc_driver")
+
 
 readme = os.path.join(os.path.dirname(__file__), 'README.md')
 
