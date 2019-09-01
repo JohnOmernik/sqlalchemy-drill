@@ -21,11 +21,6 @@
 
 from __future__ import absolute_import
 from __future__ import unicode_literals
-from sqlalchemy import exc, pool, types
-from sqlalchemy.engine import default
-from sqlalchemy.sql import compiler
-
-from sqlalchemy import inspect
 import jaydebeapi
 import os
 import logging
@@ -37,6 +32,7 @@ class DrillDialect_jdbc(DrillDialect):
     jdbc_driver_name = "org.apache.drill.jdbc.Driver"
 
     statement_compiler = DrillCompiler_sadrill
+    logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
     def __init__(self, *args, **kwargs):
         super(DrillDialect_jdbc, self).__init__(*args, **kwargs)
@@ -80,8 +76,8 @@ class DrillDialect_jdbc(DrillDialect):
                      driver)
             cparams = {p: params[p] for p in params if p not in ['host', 'username', 'password', 'port']}
 
-            print("Cargs:", cargs)
-            print("Cparams", cparams)
+            logging.info("Cargs:" + str(cargs))
+            logging.info("Cparams" + str(cparams))
 
             return (cargs, cparams)
 

@@ -23,7 +23,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 from __future__ import unicode_literals
-from sqlalchemy import exc, pool, types
+from sqlalchemy import pool
 from sqlalchemy.engine import default
 from .base import DrillDialect, DrillIdentifierPreparer, DrillCompiler_sadrill
 
@@ -79,7 +79,6 @@ class DrillDialect_sadrill(DrillDialect):
             self.username = url.username
             self.password = url.password
             self.db = db
-
 
             # Get Storage Plugin Info:
             if db_parts[0]:
