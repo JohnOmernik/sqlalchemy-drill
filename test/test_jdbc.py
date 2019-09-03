@@ -19,29 +19,19 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-from sqlalchemy.testing.suite import *
+from sqlalchemy import create_engine
 
+engine = create_engine('drill+sadrill://localhost:8047/dfs?use_ssl=False')
 
-from sqlalchemy.testing.suite import ComponentReflectionTest as _ComponentReflectionTest
+with engine.connect() as con:
+    rs = con.execute('SELECT * FROM cp.`employee.json` LIMIT 5')
+    for row in rs:
+        print(row)
 
-class ComponentReflectionTest(_ComponentReflectionTest):
-    @classmethod
-    def define_views(cls, metadata, schema):
-        return
-        for table_name in ('users', 'email_addresses'):
-            fullname = table_name
-            if schema:
-                fullname = "%s.%s" % (schema, table_name)
-            view_name = fullname + '_v'
-            query = "CREATE VIEW %s AS SELECT * FROM %s" % (
-                                view_name, fullname)
-            event.listen(
-                metadata,
-                "after_create",
-                DDL(query)
-            )
-            event.listen(
-                metadata,
-                "before_drop",
-                DDL("DROP VIEW %s" % view_name)
-            )
+print("Now JDBC")
+jdbc_engine = create_engine('drill+jdbc://admin:password@localhost:31010')
+
+with jdbc_engine.connect() as con:
+    rs = con.execute('SELECT * FROM cp.`employee.json` LIMIT 5')
+    for row in rs:
+        print(row)
