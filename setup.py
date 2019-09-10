@@ -42,7 +42,7 @@ setup(name='sqlalchemy_drill',
           "sqlalchemy"
       ],
       extras_require={
-            "jdbc": ["JPype1==0.6.3, JayDeBeApi"]
+          "jdbc": ["JPype1==0.6.3", "JayDeBeApi"]
       },
       keywords='SQLAlchemy Apache Drill',
       author='John Omernik, Charles Givre, Davide Miceli, Massimo Martiradonna',
