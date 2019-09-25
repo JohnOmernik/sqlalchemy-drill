@@ -334,6 +334,13 @@ class DrillDialect(default.DefaultDialect):
         return {c.key: getattr(obj, c.key)
                 for c in inspect(obj).mapper.column_attrs}
 
+    def get_data_type(self, data_type):
+        try:
+            dt = _type_map[data_type]
+        except:
+            dt = types.UserDefinedType
+        return dt
+
     def get_columns(self, connection, table_name, schema=None, **kw):
         result = []
 
@@ -353,11 +360,11 @@ class DrillDialect(default.DefaultDialect):
 
                 if re.search(pattern, data_type):
                     data_type = data_type.split('(')[0]
-
+                drill_data_type = self.get_data_type(data_type)
                 column = {
                     "name": row[0],
-                    "type": _type_map[data_type],
-                    "longtype": _type_map[data_type]
+                    "type": drill_data_type,
+                    "longtype": drill_data_type
                 }
                 result.append(column)
             return result
@@ -373,8 +380,8 @@ class DrillDialect(default.DefaultDialect):
         for row in query_results:
             column = {
                 "name": row[0],
-                "type": _type_map[row[1].lower()],
-                "longType": _type_map[row[1].lower()]
+                "type": self.get_data_type(row[1].lower()),
+                "longType": self.get_data_type(row[1].lower())
             }
             result.append(column)
         return result
