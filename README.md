@@ -8,16 +8,9 @@ Obviously, a working, robust dialect for Drill serves other purposes as well, bu
 
 ## Installation 
 Installing the dialect is straightforward.  Simply:
-1.  Clone or download this repository
-2.  Navigate to the directory where you cloned the repo
-3.  Run the python `setup.py` to install
 
-Examples are shown below
 ```
-git clone https://github.com/JohnOmernik/sqlalchemy-drill
-cd sqlalchemy-drill
-python3 setup.py install 
-
+python3 -m pip install git+https://github.com/JohnOmernik/sqlalchemy-drill.git
 ```
 
 ## Usage
@@ -72,6 +65,6 @@ to drillpy and pydrill for code used in creating the `drilldbapi.py` code for co
 Get the superset repo and then in
 ```
 FROM supersetimage(not sure it's name)
-RUN git clone https://github.com/JohnOmernik/sqlalchemy-drill && cd sqlalchemy-drill && python3 setup.py install 
+RUN python3 -m pip install git+https://github.com/JohnOmernik/sqlalchemy-drill.git
 CMD["superset"]
 ```
