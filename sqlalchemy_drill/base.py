@@ -252,7 +252,7 @@ class DrillDialect(default.DefaultDialect):
         result = []
         try:
             for row in curs:
-                if row.SCHEMA_NAME != "cp.default" and row.SCHEMA_NAME != "INFORMATION_SCHEMA":
+                if row.SCHEMA_NAME != "cp.default" and row.SCHEMA_NAME != "INFORMATION_SCHEMA" and row.SCHEMA_NAME != "dfs.default":
                     result.append(row.SCHEMA_NAME)
         except Exception as ex:
             logging.error(("Error in DrillDialect_sadrill.get_schema_names :: ", str(ex)))
@@ -346,10 +346,19 @@ class DrillDialect(default.DefaultDialect):
 
         plugin_type = self.get_plugin_type(connection, schema)
 
-        if plugin_type == "file":
+        # Since MongoDB uses the ** notation, bypass that and query the data directly.
+        if plugin_type == "file" or plugin_type == "mongo":
             file_name = schema + "." + table_name
             quoted_file_name = self.identifier_preparer.format_drill_table(file_name, isFile=True)
-            q = "SELECT * FROM {file_name} LIMIT 1".format(file_name=quoted_file_name)
+
+            # Since MongoDB uses the ** notation, bypass that and query the data directly.
+            if plugin_type == "mongo":
+                print("FILE NAME:", file_name, quoted_file_name)
+                mongo_quoted_file_name = self.identifier_preparer.format_drill_table(file_name, isFile=False)
+                q = "SELECT `**` FROM {table_name} LIMIT 1".format(table_name=mongo_quoted_file_name)
+            else:
+                q = "SELECT * FROM {file_name} LIMIT 1".format(file_name=quoted_file_name)
+
             column_metadata = connection.execute(q).cursor.description
 
             for row in column_metadata:
@@ -374,7 +383,7 @@ class DrillDialect(default.DefaultDialect):
         else:
             quoted_schema = self.identifier_preparer.format_drill_table(schema + "." + table_name, isFile=False)
             q = "DESCRIBE {table_name}".format(table_name=quoted_schema)
-
+        print("QUERY:" + q)
         query_results = connection.execute(q)
 
         for row in query_results:
@@ -384,6 +393,7 @@ class DrillDialect(default.DefaultDialect):
                 "longType": self.get_data_type(row[1].lower())
             }
             result.append(column)
+        print(result)
         return result
 
     def get_plugin_type(self, connection, plugin=None):
