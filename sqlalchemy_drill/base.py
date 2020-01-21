@@ -87,7 +87,7 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
             return ""
 
     def visit_tablesample(self, tablesample, asfrom=False, **kw):
-        print(tablesample)
+        logging.debug(tablesample)
 
 
 class DrillIdentifierPreparer(compiler.IdentifierPreparer):
@@ -285,7 +285,9 @@ class DrillDialect(default.DefaultDialect):
             try:
                 for row in curs:
                     if row.name.find(".view.drill") >= 0:
-                        myname = row.name.replace(".view.drill", "")
+                        # Exclude views
+                        continue
+                        #myname = row.name.replace(".view.drill", "")
                     else:
                         myname = row.name
                     tables_names.append(myname)
@@ -312,7 +314,18 @@ class DrillDialect(default.DefaultDialect):
             return tuple(tables_names)
 
     def get_view_names(self, connection, schema=None, **kw):
-        return []
+        view_names = []
+        logging.debug("View Info: Schema:", schema)
+        curs = connection.execute("SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.views WHERE table_schema='" + schema + "'")
+        try:
+            for row in curs:
+                myname = row.TABLE_NAME
+                view_names.append(myname)
+
+        except Exception as ex:
+            logging.error("Error in DrillDialect_sadrill.get_view_names :: " + str(ex))
+
+        return tuple(view_names)
 
     def has_table(self, connection, table_name, schema=None):
         try:
@@ -348,6 +361,9 @@ class DrillDialect(default.DefaultDialect):
 
         # Since MongoDB uses the ** notation, bypass that and query the data directly.
         if plugin_type == "file" or plugin_type == "mongo":
+            views = self.get_view_names(connection, schema)
+
+
             file_name = schema + "." + table_name
             quoted_file_name = self.identifier_preparer.format_drill_table(file_name, isFile=True)
 
@@ -356,6 +372,10 @@ class DrillDialect(default.DefaultDialect):
                 print("FILE NAME:", file_name, quoted_file_name)
                 mongo_quoted_file_name = self.identifier_preparer.format_drill_table(file_name, isFile=False)
                 q = "SELECT `**` FROM {table_name} LIMIT 1".format(table_name=mongo_quoted_file_name)
+            elif table_name in views:
+                logging.debug("View: ", quoted_file_name, table_name, schema)
+                view_name = "`{schema}`.`{table_name}`".format(schema=schema, table_name=table_name)
+                q = "SELECT * FROM {file_name} LIMIT 1".format(file_name=view_name)
             else:
                 q = "SELECT * FROM {file_name} LIMIT 1".format(file_name=quoted_file_name)
 
@@ -383,7 +403,7 @@ class DrillDialect(default.DefaultDialect):
         else:
             quoted_schema = self.identifier_preparer.format_drill_table(schema + "." + table_name, isFile=False)
             q = "DESCRIBE {table_name}".format(table_name=quoted_schema)
-        print("QUERY:" + q)
+        logging.debug("QUERY:" + q)
         query_results = connection.execute(q)
 
         for row in query_results:
@@ -393,7 +413,7 @@ class DrillDialect(default.DefaultDialect):
                 "longType": self.get_data_type(row[1].lower())
             }
             result.append(column)
-        print(result)
+        logging.debug(result)
         return result
 
     def get_plugin_type(self, connection, plugin=None):
