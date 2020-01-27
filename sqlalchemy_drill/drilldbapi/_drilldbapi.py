@@ -7,12 +7,14 @@ from pandas import to_datetime
 import re
 
 from . import api_globals
-from .api_exceptions import Error, Warning, AuthError, DatabaseError, ProgrammingError, CursorClosedException, ConnectionClosedException
+from .api_exceptions import AuthError, DatabaseError, ProgrammingError, CursorClosedException, \
+    ConnectionClosedException
 
 apilevel = '2.0'
 threadsafety = 3
 paramstyle = 'qmark'
 default_storage_plugin = ""
+
 
 # Python DB API 2.0 classes
 class Cursor(object):
@@ -32,7 +34,6 @@ class Cursor(object):
         self._resultSetMetadata = None
         self._resultSetStatus = None
         self.rowcount = -1
-
 
     # Decorator for methods which require connection
     def connected(func):
@@ -135,46 +136,46 @@ class Cursor(object):
             print("************************************")
             raise ProgrammingError(result.json().get("errorMessage", "ERROR"), result.status_code)
         else:
-                self._resultSet = (
-                    DataFrame(
-                        result.json()["rows"],
-                        columns=result.json()["columns"]
-                    ).fillna(value=nan)
+            self._resultSet = (
+                DataFrame(
+                    result.json()["rows"],
+                    columns=result.json()["columns"]
                 )
+            )
 
-                cols = result.json()["columns"]
-                metadata = result.json()["metadata"]
+            cols = result.json()["columns"]
+            metadata = result.json()["metadata"]
 
-                # Get column metadata
-                column_metadata = []
-                for i in range(0, len(cols)):
-                    col = {
-                        "column": cols[i],
-                        "type": metadata[i]
-                    }
-                    column_metadata.append(col)
+            # Get column metadata
+            column_metadata = []
+            for i in range(0, len(cols)):
+                col = {
+                    "column": cols[i],
+                    "type": metadata[i]
+                }
+                column_metadata.append(col)
 
-                self._resultSetMetadata = column_metadata
-                self.rowcount = len(self._resultSet)
-                self._resultSetStatus = iter(range(len(self._resultSet)))
-                column_names, column_types = self.parse_column_types(self._resultSet)
-                try:
-                    self.description = tuple(
-                        zip(
-                            column_names,
-                            metadata,
-                            [None for i in range(len(self._resultSet.dtypes.index))],
-                            [None for i in range(len(self._resultSet.dtypes.index))],
-                            [None for i in range(len(self._resultSet.dtypes.index))],
-                            [None for i in range(len(self._resultSet.dtypes.index))],
-                            [True for i in range(len(self._resultSet.dtypes.index))]
-                        )
+            self._resultSetMetadata = column_metadata
+            self.rowcount = len(self._resultSet)
+            self._resultSetStatus = iter(range(len(self._resultSet)))
+            column_names, column_types = self.parse_column_types(self._resultSet)
+            try:
+                self.description = tuple(
+                    zip(
+                        column_names,
+                        metadata,
+                        [None for i in range(len(self._resultSet.dtypes.index))],
+                        [None for i in range(len(self._resultSet.dtypes.index))],
+                        [None for i in range(len(self._resultSet.dtypes.index))],
+                        [None for i in range(len(self._resultSet.dtypes.index))],
+                        [True for i in range(len(self._resultSet.dtypes.index))]
                     )
-                    return self
-                except Exception as ex:
-                    print("************************************")
-                    print("Error in Cursor.execute", str(ex))
-                    print("************************************")
+                )
+                return self
+            except Exception as ex:
+                print("************************************")
+                print("Error in Cursor.execute", str(ex))
+                print("************************************")
 
     @connected
     def fetchone(self):
@@ -258,6 +259,7 @@ class Connection(object):
                 raise ConnectionClosedException("Connection object is closed")
             else:
                 return func(self, *args, **kwargs)
+
         return func_wrapper
 
     def is_connected(self):
@@ -354,7 +356,7 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
         if db is not None:
             local_payload = api_globals._PAYLOAD.copy()
             local_url = "/query.json"
-            #local_payload["query"] = "USE {}".format(db)
+            # local_payload["query"] = "USE {}".format(db)
             local_payload["query"] = "SELECT 'test' FROM (VALUES(1))"
 
             response = session.post(
@@ -366,7 +368,7 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
             if response.status_code != 200:
                 print("************************************")
                 print("Error in connect")
-                print( "Response code:", response.status_code)
+                print("Response code:", response.status_code)
                 print("************************************")
                 raise DatabaseError(str(response.json()["errorMessage"]), response.status_code)
 

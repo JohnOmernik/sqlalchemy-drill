@@ -315,7 +315,6 @@ class DrillDialect(default.DefaultDialect):
 
     def get_view_names(self, connection, schema=None, **kw):
         view_names = []
-        logging.debug("View Info: Schema:", schema)
         curs = connection.execute("SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.views WHERE table_schema='" + schema + "'")
         try:
             for row in curs:
