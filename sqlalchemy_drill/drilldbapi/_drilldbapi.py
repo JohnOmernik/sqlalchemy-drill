@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 from json import dumps
-from numpy import nan
 from pandas import DataFrame
 from requests import Session
-from pandas import to_datetime
 import re
-
+import logging
 from . import api_globals
 from .api_exceptions import AuthError, DatabaseError, ProgrammingError, CursorClosedException, \
     ConnectionClosedException
@@ -15,6 +13,9 @@ threadsafety = 3
 paramstyle = 'qmark'
 default_storage_plugin = ""
 
+
+logging.basicConfig(level=logging.WARN)
+logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s')
 
 # Python DB API 2.0 classes
 class Cursor(object):
@@ -79,29 +80,13 @@ class Cursor(object):
         )
 
     @staticmethod
-    def parse_column_types(df):
+    def parse_column_types(metadata):
         names = []
         types = []
-        try:
-            for column in df:
-                names.append(column)
-                try:
-                    df[column] = df[column].astype(int)
-                    types.append("bigint")
-                except ValueError:
-                    try:
-                        df[column] = df[column].astype(float)
-                        types.append("decimal")
-                    except ValueError:
-                        try:
-                            df[column] = to_datetime(df[column])
-                            types.append("timestamp")
-                        except ValueError:
-                            types.append("varchar")
-        except Exception as ex:
-            print("************************************")
-            print("Error in Cursor.parse_column_types", str(ex))
-            print("************************************")
+        for row in metadata:
+            names.append(row['column'])
+            types.append(row['type'].lower())
+
         return names, types
 
     @connected
@@ -158,7 +143,8 @@ class Cursor(object):
             self._resultSetMetadata = column_metadata
             self.rowcount = len(self._resultSet)
             self._resultSetStatus = iter(range(len(self._resultSet)))
-            column_names, column_types = self.parse_column_types(self._resultSet)
+            column_names, column_types = self.parse_column_types(self._resultSetMetadata)
+
             try:
                 self.description = tuple(
                     zip(
