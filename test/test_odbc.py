@@ -19,12 +19,36 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-__version__ = '0.9'
-from sqlalchemy.dialects import registry
+import os
 
-registry.register("drill", "sqlalchemy_drill.sadrill", "DrillDialect_sadrill")
-registry.register("drill.sadrill", "sqlalchemy_drill.sadrill", "DrillDialect_sadrill")
+from sqlalchemy import create_engine
 
-registry.register("drill.jdbc", "sqlalchemy_drill.jdbc", "DrillDialect_jdbc")
 
-registry.register("drill.odbc", "sqlalchemy_drill.odbc", "DrillDialect_odbc")
+print('Using ODBC connection string:')
+
+engine = create_engine('drill+odbc:///?'
+                       'Driver=/opt/mapr/drill/lib/64/libdrillodbc_sb64.so&'
+                       'ConnectionType=Direct&'
+                       'HOST=localhost&'
+                       'PORT=31010&'
+                       'AuthenticationType=Plain&'
+                       'UID=admin&'
+                       'PWD=password&'
+                       )
+
+with engine.connect() as con:
+    rs = con.execute('SELECT * FROM cp.`employee.json` LIMIT 5')
+    for row in rs:
+        print(row)
+
+
+print('Using DSN:')
+
+os.environ['ODBCINI'] = os.path.join(os.path.dirname(__file__), 'test_odbc.ini')
+
+engine = create_engine('drill+odbc:///?DSN=test DSN')
+
+with engine.connect() as con:
+    rs = con.execute('SELECT * FROM cp.`employee.json` LIMIT 5')
+    for row in rs:
+        print(row)

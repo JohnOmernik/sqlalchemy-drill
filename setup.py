@@ -42,7 +42,8 @@ setup(name='sqlalchemy_drill',
           "sqlalchemy"
       ],
       extras_require={
-          "jdbc": ["JPype1==0.6.3", "JayDeBeApi"]
+          "jdbc": ["JPype1==0.6.3", "JayDeBeApi"],
+          "odbc": ["pyodbc"],
       },
       keywords='SQLAlchemy Apache Drill',
       author='John Omernik, Charles Givre, Davide Miceli, Massimo Martiradonna',
@@ -57,6 +58,8 @@ setup(name='sqlalchemy_drill',
           'sqlalchemy.dialects': [
               'drill = sqlalchemy_drill.sadrill:DrillDialect_sadrill',
               'drill.sadrill = sqlalchemy_drill.sadrill:DrillDialect_sadrill',
+              'drill.jdbc = sqlalchemy_drill.jdbc:DrillDialect_jdbc',
+              'drill.odbc = sqlalchemy_drill.odbc:DrillDialect_odbc',
           ]
       }
     )

@@ -54,6 +54,32 @@ For a simple installation, this might look like:
 drill+jdbc://admin:password@localhost:31010
 ```
 
+## Usage with ODBC
+In order to configure SQLAlchemy to work with Drill via ODBC you must:
+* Install latest Drill ODBC Driver: https://drill.apache.org/docs/installing-the-driver-on-linux/
+* Ensure that you have ODBC support in your system (`unixODBC` package for RedHat-based systems).
+* Install `pyodbc` Python package.  
+  This module is listed as an optional dependency and will not be installed by the default installer.
+
+To connect to Drill with SQLAlchemy use the following connection string:
+```
+drill+odbc:///?<ODBC connection parameters>
+```
+
+Connection properties are available in the official documentation: https://drill.apache.org/docs/odbc-configuration-reference/
+
+For a simple installation, this might look like:
+```
+drill+odbc:///?Driver=/opt/mapr/drill/lib/64/libdrillodbc_sb64.so&ConnectionType=Direct&HOST=localhost&PORT=31010&AuthenticationType=Plain&UID=admin&PWD=password
+```
+or for the case when you have DSN configured in `odbc.ini`:
+```
+drill+odbc:///?DSN=drill_dsn_name
+```
+
+**Note:** it's better to avoid using connection string with `hostname:port` or `username`/`password`, like 'drill+odbc://admin:password@localhost:31010/' but use only ODBC properties instead to avoid any misinterpretation between these parameters.
+
+
 ## Usage with Superset
 For a complete tutorial on how to use Superset with Drill, read the tutorial on @cgivre's blog available here: http://thedataist.com/visualize-anything-with-superset-and-drill/.
 
