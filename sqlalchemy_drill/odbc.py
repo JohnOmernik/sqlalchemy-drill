@@ -19,12 +19,37 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-__version__ = '0.9'
-from sqlalchemy.dialects import registry
+from __future__ import absolute_import
+from __future__ import unicode_literals
+import pyodbc
+import logging
+from .base import DrillDialect, DrillCompiler_sadrill
 
-registry.register("drill", "sqlalchemy_drill.sadrill", "DrillDialect_sadrill")
-registry.register("drill.sadrill", "sqlalchemy_drill.sadrill", "DrillDialect_sadrill")
 
-registry.register("drill.jdbc", "sqlalchemy_drill.jdbc", "DrillDialect_jdbc")
+class DrillDialect_odbc(DrillDialect):
+    statement_compiler = DrillCompiler_sadrill
+    logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
-registry.register("drill.odbc", "sqlalchemy_drill.odbc", "DrillDialect_odbc")
+    def create_connect_args(self, url):
+        if url is not None:
+            params = super(DrillDialect, self).create_connect_args(url)[1]
+
+            # Convert URL query parameters to ODBC connection string
+            connection_string = ";".join("{}={}".format(k, v) for (k, v) in params.items())
+
+            cargs = (connection_string, )
+            cparams = {
+                "autocommit": True,  # Drill ODBC driver does not support transactions
+            }
+
+            logging.info("Cargs:" + str(cargs))
+            logging.info("Cparams" + str(cparams))
+
+            return (cargs, cparams)
+
+    @classmethod
+    def dbapi(cls):
+        return pyodbc
+
+
+dialect = DrillDialect_odbc
