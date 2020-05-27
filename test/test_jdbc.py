@@ -31,6 +31,7 @@ with engine.connect() as con:
 print("Now JDBC")
 jdbc_engine = create_engine('drill+jdbc://admin:password@localhost:31010')
 
+
 with jdbc_engine.connect() as con:
     rs = con.execute('SELECT * FROM cp.`employee.json` LIMIT 5')
     for row in rs:
