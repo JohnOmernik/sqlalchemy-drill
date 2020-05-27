@@ -21,7 +21,8 @@
 
 from __future__ import absolute_import
 from __future__ import unicode_literals
-import jaydebeapi
+import jpype
+import jpype.dbapi2 as jaydebeapi
 import os
 import logging
 from .base import DrillDialect, DrillCompiler_sadrill
@@ -45,6 +46,8 @@ class DrillDialect_jdbc(DrillDialect):
         if self.jdbc_jar_name is None:
             raise Exception(
                 'To connect to Drill via JDBC, you must set the DRILL_JDBC_JAR_NAME environment variable.')
+        print("-Djava.class.path=" + self.jdbc_driver_path + self.jdbc_jar_name)
+
 
     def initialize(self, connection):
         super(DrillDialect_jdbc, self).initialize(connection)
@@ -75,6 +78,9 @@ class DrillDialect_jdbc(DrillDialect):
                      [params['username'], params['password']],
                      driver)
             cparams = {p: params[p] for p in params if p not in ['host', 'username', 'password', 'port']}
+
+            jpype.startJVM("-ea","-Djava.class.path=" + self.jdbc_driver_path + self.jdbc_jar_name)
+            #dbapi2.connect('jdbc:drill:drillbit=localhost:31010', driver="org.apache.drill.jdbc.Driver")
 
             logging.info("Cargs:" + str(cargs))
             logging.info("Cparams" + str(cparams))
