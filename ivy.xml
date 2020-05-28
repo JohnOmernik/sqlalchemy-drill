@@ -1,0 +1,11 @@
+<ivy-module version="2.0" xmlns:e="http://ant.apache.org/ivy/extra" xmlns:m="http://ant.apache.org/ivy/maven">
+    <info organisation="org.jpype" module="jpype"/>
+
+   <configurations defaultconf="deps">
+       <conf name="deps" description="binary jars"/>
+   </configurations>
+   
+   <dependencies>
+       <dependency org="org.apache.drill.exec" name="drill-jdbc-all" rev="1.17.0" conf="deps->default"/>
+   </dependencies>
+</ivy-module>
