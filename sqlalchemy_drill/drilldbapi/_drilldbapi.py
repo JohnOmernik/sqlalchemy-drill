@@ -14,17 +14,17 @@ paramstyle = 'qmark'
 default_storage_plugin = ""
 
 DRILL_PANDAS_TYPE_MAP = {
-        'BIGINT': 'int64',
+        'BIGINT': 'Int64',
         'BINARY': 'object',
-        'BIT':  'boolean', # handled as a special case
+        'BIT':  'boolean',
         'DATE': 'datetime64[ns]',
         'FLOAT4': 'float32',
         'FLOAT8': 'float64',
-        'INT': 'int32',
+        'INT': 'Int32',
         'INTERVALDAY': 'string' if pd.__version__ >= '1' else 'object',
         'INTERVALYEAR': 'string' if pd.__version__ >= '1' else 'object',
-        'SMALLINT': 'int32',
-        'TIME': 'timedelta64[ns]' # handled as a special case,
+        'SMALLINT': 'Int32',
+        'TIME': 'timedelta64[ns]',
         'TIMESTAMP': 'datetime64[ns]',
         'VARDECIMAL': 'object',
         'VARCHAR' : 'string' if pd.__version__ >= '1' else 'object'
@@ -164,11 +164,13 @@ class Cursor(object):
 
                 if m in DRILL_PANDAS_TYPE_MAP:
                     if m == 'BIT':
-                        df[cols[i]] = df[cols[i]] == 'true'
+                        df[self.columns[i]] = df[self.columns[i]] == 'true'
                     elif m == 'TIME': # m in ['TIME', 'INTERVAL']: # parsing of ISO-8601 intervals appears broken as of Pandas 1.0.3
-                        df[cols[i]] = pd.to_timedelta(df[cols[i]])
-                    else:
-                        df[cols[i]] = df[cols[i]].astype(DRILL_PANDAS_TYPE_MAP[m])
+                        df[self.columns[i]] = pd.to_timedelta(df[self.columns[i]])
+                    elif m in ['BIGINT', 'FLOAT4', 'FLOAT8', 'INT', 'SMALLINT']:
+                        df[self.columns[i]] = pd.to_numeric(df[self.columns[i]])
+
+                    df[self.columns[i]] = df[self.columns[i]].astype(DRILL_PANDAS_TYPE_MAP[m])
                 else:
                     print("************************************")
                     print("Warning: could not map Drill column {} of type {} to a Pandas dtype".format(cols[i], m))
