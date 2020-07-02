@@ -55,6 +55,7 @@ _type_map = {
     'map': types.UserDefinedType,
     'list': types.UserDefinedType,
     'float8': types.FLOAT,
+    'json': types.JSON,
 }
 
 class DrillCompiler_sadrill(compiler.SQLCompiler):
@@ -88,6 +89,24 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
 
     def visit_tablesample(self, tablesample, asfrom=False, **kw):
         logging.debug(tablesample)
+
+
+class DrillTypeCompiler_sadrill(compiler.GenericTypeCompiler):
+
+    def visit_JSON(self, type_, **kwargs):
+        # TODO might need to do more to fully enable json support
+        # see https://gist.github.com/slitayem/c7b87d3f329caaa9794a408ad83ef0e5
+        #
+        # adding this class+method (plus adding json to `_type_map` above)
+        # seems to be enough to avoid exceptions when trying to use tables
+        # with json columns like these bugs in other sqlalchemy extensions/dialects:
+        # - https://bitbucket.org/estin/sadisplay/issues/17/cannot-render-json-column-type
+        #   (fixed by https://bitbucket.org/estin/sadisplay/commits/a49203105e8f4f1048cb28a64f21a2e789f04594)
+        # - https://github.com/insightindustry/sqlathanor/issues/63
+        #   (fixed by https://github.com/insightindustry/sqlathanor/commit/697bd455d4c38aa8a0888e118106dea429f06f9e)
+        # - https://github.com/sqlalchemy-bot/test_sqlalchemy/issues/3549
+        # - https://stackoverflow.com/questions/13484900/generate-sql-string-using-schema-createtable-fails-with-postgresql-array
+        return 'JSON'
 
 
 class DrillIdentifierPreparer(compiler.IdentifierPreparer):
@@ -172,6 +191,7 @@ class DrillDialect(default.DefaultDialect):
     dbapi = ""
     preparer = DrillIdentifierPreparer
     statement_compiler = DrillCompiler_sadrill
+    type_compiler = DrillTypeCompiler_sadrill
     poolclass = pool.SingletonThreadPool
     supports_alter = False
     supports_pk_autoincrement = False
