@@ -76,7 +76,8 @@ class Cursor(object):
         return session.post(
             proto + host + ":" + str(port) + "/query.json",
             data=dumps(local_payload),
-            headers=api_globals._HEADER
+            headers=api_globals._HEADER,
+            timeout=None
         )
 
     @staticmethod
