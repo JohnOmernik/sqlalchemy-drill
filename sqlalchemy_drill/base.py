@@ -152,8 +152,7 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
         elif isFile and num_dots == 2:
             # Case for file and no workspace
             plugin = schema_parts[0]
-            table = schema_parts[1] + "." + schema_parts[2]
-            formatted_schema = plugin + "`.`" + table + "`"
+            formatted_schema = plugin + "." + schema_parts[1] + ".`" + schema_parts[2] + "`"
         else:
             # Case for non-file plugins or incomplete schema parts
             for part in schema_parts:
