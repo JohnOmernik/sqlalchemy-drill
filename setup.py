@@ -14,7 +14,7 @@ import os
 import sys
 import re
 
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Extension
 
 v = open(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'sqlalchemy_drill', '__init__.py'))
 VERSION = re.compile(r".*__version__ = '(.*?)'", re.S).match(v.read()).group(1)
