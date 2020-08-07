@@ -51,8 +51,8 @@ drill+jdbc://admin:password@localhost:31010
 In order to configure SQLAlchemy to work with Drill via ODBC you must:
 * Install latest Drill ODBC Driver: https://drill.apache.org/docs/installing-the-driver-on-linux/
 * Ensure that you have ODBC support in your system (`unixODBC` package for RedHat-based systems).
-* Install `pyodbc` Python package.  
-  This module is listed as an optional dependency and will not be installed by the default installer.
+* Install `pyodbc` Python package.
+This module is listed as an optional dependency and will not be installed by the default installer.
 
 To connect to Drill with SQLAlchemy use the following connection string:
 ```
@@ -89,7 +89,8 @@ to drillpy and pydrill for code used in creating the `drilldbapi.py` code for co
 
 ### Docker 
 Get the superset repo and then in
-```
+
+```python
 FROM supersetimage(not sure it's name)
 RUN python3 -m pip install git+https://github.com/JohnOmernik/sqlalchemy-drill.git
 CMD["superset"]
