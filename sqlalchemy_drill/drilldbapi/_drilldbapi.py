@@ -122,31 +122,26 @@ class Cursor(object):
             self.proto,
             self._session
         )
-
-        print("************************************")
-        print("Query:", operation)
-        print("************************************")
-
+        
         matchObj = re.match(r'^SHOW FILES FROM\s(.+)', operation, re.IGNORECASE)
         if matchObj:
             self.default_storage_plugin = matchObj.group(1)
 
         if result.status_code != 200:
-            print("************************************")
-            print("Error in Cursor.execute")
-            print("************************************")
+            logging.error("Error in Cursor.execute")
             raise ProgrammingError(result.json().get("errorMessage", "ERROR"), result.status_code)
         else:
             result_json = result.json()
-            cols = result_json["columns"]
-            metadata = result_json["metadata"]
+            self.cols = result_json["columns"]
+            self.columns = self.cols
+            self.metadata = result_json["metadata"]
 
             # Get column metadata
             column_metadata = []
-            for i in range(0, len(cols)):
+            for i in range(0, len(self.cols)):
                 col = {
-                    "column": cols[i],
-                    "type": metadata[i]
+                    "column": self.cols[i],
+                    "type": self.metadata[i]
                 }
                 column_metadata.append(col)
 
@@ -158,18 +153,16 @@ class Cursor(object):
             # HTTP API always quotes the values in the JSON it returns, thereby
             # providing DataFrame(...) with a dict of strings.  We now use
             # the metadata returned by Drill to correct this
-            for i in range(len(cols)):
+            for i in range(len(self.cols)):
                 col_name = self.columns[i]
                 # strip any precision information that might be in the metdata e.g. VARCHAR(10)
                 col_drill_type = re.sub(r'\(.*\)', '', self.metadata[i])
 
                 if col_drill_type not in DRILL_PANDAS_TYPE_MAP:
-                    print("************************************")
-                    print("Warning: could not map Drill column {} of type {} to a Pandas dtype".format(cols[i], m))
-                    print("************************************")
+                    logging.warn("Warning: could not map Drill column {} of type {} to a Pandas dtype".format(self.cols[i], self.metadata[i]))
                 else:
                     col_dtype = DRILL_PANDAS_TYPE_MAP[col_drill_type]
-                    logger.debug('Mapping column {} of Drill type {} to dtype {}'.format(col_name, col_drill_type, col_dtype))
+                    logging.debug('Mapping column {} of Drill type {} to dtype {}'.format(col_name, col_drill_type, col_dtype))
 
                     # Pandas < 1.0.0 cannot handle null ints so we sometimes cannot cast to an int dtype
                     can_cast = True
@@ -183,7 +176,7 @@ class Cursor(object):
                     elif col_drill_type in ['BIGINT', 'INT', 'SMALLINT']:
                         df[col_name] = pd.to_numeric(df[col_name])
                         if pd.__version__ < '1' and df[col_name].isnull().values.any():
-                            logger.warn('Column {} of Drill type {} contains nulls so cannot be converted to an integer dtype in Pandas < 1.0.0'.format(col_name, col_drill_type))
+                            logging.warn('Column {} of Drill type {} contains nulls so cannot be converted to an integer dtype in Pandas < 1.0.0'.format(col_name, col_drill_type))
                             can_cast = False
 
                     if can_cast:
@@ -199,7 +192,7 @@ class Cursor(object):
                 self.description = tuple(
                     zip(
                         column_names,
-                        metadata,
+                        self.metadata,
                         [None for i in range(len(self._resultSet.dtypes.index))],
                         [None for i in range(len(self._resultSet.dtypes.index))],
                         [None for i in range(len(self._resultSet.dtypes.index))],
