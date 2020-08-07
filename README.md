@@ -10,6 +10,12 @@ Obviously, a working, robust dialect for Drill serves other purposes as well, bu
 Installing the dialect is straightforward.  Simply:
 
 ```
+pip install sqlalchemy-drill
+```
+
+Alternatively, you can download the latest release from github and install from here:
+
+```python
 python3 -m pip install git+https://github.com/JohnOmernik/sqlalchemy-drill.git
 ```
 
