@@ -12,21 +12,20 @@
 
 import os
 import sys
-import re
+import io
 from os import path
-from setuptools import setup, find_packages, Extension
+from setuptools import setup, find_packages
 
 v = open(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'sqlalchemy_drill', '__init__.py'))
-# VERSION = re.compile(r".*__version__ = '(.*?)'", re.S).match(v.read()).group(1)
 v.close()
 
 
 this_directory = path.abspath(path.dirname(__file__))
-with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
+with io.open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(name='sqlalchemy_drill',
-      version='0.1',
+      version='0.2',
       description="Apache Drill for SQLAlchemy",
       long_description=long_description,
       long_description_content_type="text/markdown",
