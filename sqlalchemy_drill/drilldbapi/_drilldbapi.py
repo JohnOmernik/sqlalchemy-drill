@@ -122,7 +122,7 @@ class Cursor(object):
             self.proto,
             self._session
         )
-        
+
         matchObj = re.match(r'^SHOW FILES FROM\s(.+)', operation, re.IGNORECASE)
         if matchObj:
             self.default_storage_plugin = matchObj.group(1)
@@ -153,7 +153,7 @@ class Cursor(object):
             # HTTP API always quotes the values in the JSON it returns, thereby
             # providing DataFrame(...) with a dict of strings.  We now use
             # the metadata returned by Drill to correct this
-            for i in range(len(self.cols)):
+            for i in range(len(self.columns)):
                 col_name = self.columns[i]
                 # strip any precision information that might be in the metdata e.g. VARCHAR(10)
                 col_drill_type = re.sub(r'\(.*\)', '', self.metadata[i])
@@ -164,25 +164,28 @@ class Cursor(object):
                     col_dtype = DRILL_PANDAS_TYPE_MAP[col_drill_type]
                     logging.debug('Mapping column {} of Drill type {} to dtype {}'.format(col_name, col_drill_type, col_dtype))
 
-                    # Pandas < 1.0.0 cannot handle null ints so we sometimes cannot cast to an int dtype
-                    can_cast = True
+                    # Null values cause problems, so first verify if there are null values in the column
+                    if df[col_name].isnull().values.any():
+                        can_cast = False
+                    else:
+                        can_cast = True
 
-                    if col_drill_type == 'BIT':
-                        df[col_name] = df[col_name] == 'true'
-                    elif col_drill_type == 'TIME': # col_name in ['TIME', 'INTERVAL']: # parsing of ISO-8601 intervals appears broken as of Pandas 1.0.3
-                        df[col_name] = pd.to_timedelta(df[col_name])
-                    elif col_drill_type in ['FLOAT4', 'FLOAT8']:
-                        df[col_name] = pd.to_numeric(df[col_name])
-                    elif col_drill_type in ['BIGINT', 'INT', 'SMALLINT']:
-                        df[col_name] = pd.to_numeric(df[col_name])
-                        if pd.__version__ < '1' and df[col_name].isnull().values.any():
-                            logging.warn('Column {} of Drill type {} contains nulls so cannot be converted to an integer dtype in Pandas < 1.0.0'.format(col_name, col_drill_type))
-                            can_cast = False
+                        if col_drill_type == 'BIT':
+                            df[col_name] = df[col_name] == 'true'
+                        elif col_drill_type == 'TIME': # col_name in ['TIME', 'INTERVAL']: # parsing of ISO-8601 intervals appears broken as of Pandas 1.0.3
+                            df[col_name] = pd.to_timedelta(df[col_name])
+                        elif col_drill_type in ['FLOAT4', 'FLOAT8']:
+                            df[col_name] = pd.to_numeric(df[col_name])
+                        elif col_drill_type in ['BIGINT', 'INT', 'SMALLINT']:
+                            df[col_name] = pd.to_numeric(df[col_name])
+                            if df[col_name].isnull().values.any():
+                                logging.warn('Column {} of Drill type {} contains nulls so cannot be converted to an integer dtype in Pandas < 1.0.0'.format(col_name, col_drill_type))
+                                can_cast = False
 
                     if can_cast:
                         df[col_name] = df[col_name].astype(col_dtype)
 
-            self._resultSet = ( df )
+            self._resultSet = df
 
             self.rowcount = len(self._resultSet)
             self._resultSetStatus = iter(range(len(self._resultSet)))
@@ -202,9 +205,7 @@ class Cursor(object):
                 )
                 return self
             except Exception as ex:
-                print("************************************")
-                print("Error in Cursor.execute", str(ex))
-                print("************************************")
+                logging.error(("Error in Cursor.execute", str(ex)))
 
     @connected
     def fetchone(self):
@@ -254,6 +255,7 @@ class Cursor(object):
         except StopIteration:
             print("************************************")
             print("Caught StopIteration in fetchall")
+            print(StopIteration.value, StopIteration.with_traceback())
             print("************************************")
             return None
 
