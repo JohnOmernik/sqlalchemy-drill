@@ -16,7 +16,7 @@ default_storage_plugin = ""
 DRILL_PANDAS_TYPE_MAP = {
         'BIGINT': 'Int64',
         'BINARY': 'object',
-        'BIT':  'boolean',
+        'BIT':  'bool',
         'DATE': 'datetime64[ns]',
         'FLOAT4': 'float32',
         'FLOAT8': 'float64',
