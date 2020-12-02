@@ -176,7 +176,8 @@ class Cursor(object):
                             #df[col_name] = pd.to_timedelta(df[col_name])
                             #df[col_name] = pd.to_datetime()
                         elif col_drill_type in ['FLOAT4', 'FLOAT8']:
-                            df[col_name] = pd.to_numeric(df[col_name])
+                            # coerce errors when parsing floats to handle 'NaN' ('Infinity' is fine)
+                            df[col_name] = pd.to_numeric(df[col_name], errors='coerce')
                         elif col_drill_type in ['BIGINT', 'INT', 'SMALLINT']:
                             df[col_name] = pd.to_numeric(df[col_name])
                             if df[col_name].isnull().values.any():
