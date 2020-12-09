@@ -16,7 +16,7 @@ default_storage_plugin = ""
 DRILL_PANDAS_TYPE_MAP = {
         'BIGINT': 'Int64',
         'BINARY': 'object',
-        'BIT':  'bool',
+        'BIT':  'boolean' if pd.__version__ >= '1' else 'bool',
         'DATE': 'datetime64[ns]',
         'FLOAT4': 'float32',
         'FLOAT8': 'float64',
@@ -168,7 +168,9 @@ class Cursor(object):
                         can_cast = True
 
                         if col_drill_type == 'BIT':
-                            df[col_name] = df[col_name] == 'true'
+                            if pd.__version__ < '1' and df[col_name].isna().any():
+                                logger.warn('Null boolean values will be coerced to False!  Upgrade to Pandas >= 1.0 for nullable booleans.')
+                            df[col_name] = df[col_name].apply(lambda b: b == 'true' if b else None)
                         # Commenting this out for the time being. Pandas does not seem to support time data types (times with no dates) and hence
                         # this functionality breaks Superset. 
                         #elif col_drill_type == 'TIME': # col_name in ['TIME', 'INTERVAL']: # parsing of ISO-8601 intervals appears broken as of Pandas 1.0.3
