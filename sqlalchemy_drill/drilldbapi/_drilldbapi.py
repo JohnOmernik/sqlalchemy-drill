@@ -24,7 +24,7 @@ DRILL_PANDAS_TYPE_MAP = {
         'INTERVALDAY': 'string' if pd.__version__ >= '1' else 'object',
         'INTERVALYEAR': 'string' if pd.__version__ >= '1' else 'object',
         'SMALLINT': 'Int32',
-        'TIME': 'timedelta64[ns]',
+        'TIME': 'string' if pd.__version__ >= '1' else 'object',
         'TIMESTAMP': 'datetime64[ns]',
         'VARDECIMAL': 'object',
         'VARCHAR' : 'string' if pd.__version__ >= '1' else 'object'
@@ -168,8 +168,12 @@ class Cursor(object):
 
                         if col_drill_type == 'BIT':
                             df[col_name] = df[col_name] == 'true'
-                        elif col_drill_type == 'TIME': # col_name in ['TIME', 'INTERVAL']: # parsing of ISO-8601 intervals appears broken as of Pandas 1.0.3
-                            df[col_name] = pd.to_timedelta(df[col_name])
+                        # Commenting this out for the time being. Pandas does not seem to support time data types (times with no dates) and hence
+                        # this functionality breaks Superset. 
+                        #elif col_drill_type == 'TIME': # col_name in ['TIME', 'INTERVAL']: # parsing of ISO-8601 intervals appears broken as of Pandas 1.0.3
+                            #logging.warning("Time Column: {} {}".format(col_name, df[col_name].iloc[0]))
+                            #df[col_name] = pd.to_timedelta(df[col_name])
+                            #df[col_name] = pd.to_datetime()
                         elif col_drill_type in ['FLOAT4', 'FLOAT8']:
                             df[col_name] = pd.to_numeric(df[col_name])
                         elif col_drill_type in ['BIGINT', 'INT', 'SMALLINT']:
