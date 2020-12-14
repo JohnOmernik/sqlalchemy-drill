@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from json import dumps
-from pandas import DataFrame
+import pandas as pd
 from requests import Session
 import re
 import logging
@@ -13,6 +13,22 @@ threadsafety = 3
 paramstyle = 'qmark'
 default_storage_plugin = ""
 
+DRILL_PANDAS_TYPE_MAP = {
+        'BIGINT': 'Int64',
+        'BINARY': 'object',
+        'BIT':  'bool',
+        'DATE': 'datetime64[ns]',
+        'FLOAT4': 'float32',
+        'FLOAT8': 'float64',
+        'INT': 'Int32',
+        'INTERVALDAY': 'string' if pd.__version__ >= '1' else 'object',
+        'INTERVALYEAR': 'string' if pd.__version__ >= '1' else 'object',
+        'SMALLINT': 'Int32',
+        'TIME': 'timedelta64[ns]',
+        'TIMESTAMP': 'datetime64[ns]',
+        'VARDECIMAL': 'object',
+        'VARCHAR' : 'string' if pd.__version__ >= '1' else 'object'
+        }
 
 logging.basicConfig(level=logging.WARN)
 logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s')
@@ -40,14 +56,10 @@ class Cursor(object):
     def connected(func):
         def func_wrapper(self, *args, **kwargs):
             if self._connected is False:
-                print("************************************")
-                print("Error in Cursor.func_wrapper")
-                print("************************************")
+                logging.error("Error in Cursor.func_wrapper")
                 raise CursorClosedException("Cursor object is closed")
             elif self.connection._connected is False:
-                print("************************************")
-                print("Error in Cursor.func_wrapper")
-                print("************************************")
+                logging.error("Error in Cursor.func_wrapper")
                 raise ConnectionClosedException("Connection object is closed")
             else:
                 return func(self, *args, **kwargs)
@@ -64,9 +76,7 @@ class Cursor(object):
                 else:
                     query = query.replace("?", str(param), 1)
         except Exception as ex:
-            print("************************************")
-            print("Error in Cursor.substitute_in_query", str(ex))
-            print("************************************")
+            logging.error("Error in Cursor.substitute_in_query" + str(ex))
         return query
 
     @staticmethod
@@ -108,40 +118,72 @@ class Cursor(object):
             self._session
         )
 
-        print("************************************")
-        print("Query:", operation)
-        print("************************************")
-
-        matchObj = re.match('^SHOW FILES FROM\s(.+)', operation, re.IGNORECASE)
+        matchObj = re.match(r'^SHOW FILES FROM\s(.+)', operation, re.IGNORECASE)
         if matchObj:
             self.default_storage_plugin = matchObj.group(1)
 
         if result.status_code != 200:
-            print("************************************")
-            print("Error in Cursor.execute")
-            print("************************************")
+            logging.error("Error in Cursor.execute")
             raise ProgrammingError(result.json().get("errorMessage", "ERROR"), result.status_code)
         else:
-            self._resultSet = (
-                DataFrame(
-                    result.json()["rows"],
-                    columns=result.json()["columns"]
-                )
-            )
-
-            cols = result.json()["columns"]
-            metadata = result.json()["metadata"]
+            result_json = result.json()
+            self.cols = result_json["columns"]
+            self.columns = self.cols
+            self.metadata = result_json["metadata"]
 
             # Get column metadata
             column_metadata = []
-            for i in range(0, len(cols)):
+            for i in range(0, len(self.cols)):
                 col = {
-                    "column": cols[i],
-                    "type": metadata[i]
+                    "column": self.cols[i],
+                    "type": self.metadata[i]
                 }
                 column_metadata.append(col)
 
             self._resultSetMetadata = column_metadata
+
+            df = pd.DataFrame(result_json["rows"], columns=result_json["columns"])
+
+            # The columns in df all have a dtype of object because Drill's
+            # HTTP API always quotes the values in the JSON it returns, thereby
+            # providing DataFrame(...) with a dict of strings.  We now use
+            # the metadata returned by Drill to correct this
+            for i in range(len(self.columns)):
+                col_name = self.columns[i]
+                # strip any precision information that might be in the metdata e.g. VARCHAR(10)
+                col_drill_type = re.sub(r'\(.*\)', '', self.metadata[i])
+
+                if col_drill_type not in DRILL_PANDAS_TYPE_MAP:
+                    logging.warning("Warning: could not map Drill column {} of type {} to a Pandas dtype".format(self.cols[i], self.metadata[i]))
+                else:
+                    col_dtype = DRILL_PANDAS_TYPE_MAP[col_drill_type]
+                    logging.debug('Mapping column {} of Drill type {} to dtype {}'.format(col_name, col_drill_type, col_dtype))
+
+                    # Null values cause problems, so first verify if there are null values in the column
+                    if df[col_name].isnull().values.any():
+                        can_cast = False
+                    elif str(df[col_name].iloc[0]).startswith("[") and str(df[col_name].iloc[0]).endswith("]"):
+                        can_cast = False
+                    else:
+                        can_cast = True
+
+                        if col_drill_type == 'BIT':
+                            df[col_name] = df[col_name] == 'true'
+                        elif col_drill_type == 'TIME': # col_name in ['TIME', 'INTERVAL']: # parsing of ISO-8601 intervals appears broken as of Pandas 1.0.3
+                            df[col_name] = pd.to_timedelta(df[col_name])
+                        elif col_drill_type in ['FLOAT4', 'FLOAT8']:
+                            df[col_name] = pd.to_numeric(df[col_name])
+                        elif col_drill_type in ['BIGINT', 'INT', 'SMALLINT']:
+                            df[col_name] = pd.to_numeric(df[col_name])
+                            if df[col_name].isnull().values.any():
+                                logging.warning('Column {} of Drill type {} contains nulls so cannot be converted to an integer dtype in Pandas < 1.0.0'.format(col_name, col_drill_type))
+                                can_cast = False
+
+                    if can_cast:
+                        df[col_name] = df[col_name].astype(col_dtype)
+
+            self._resultSet = df
+
             self.rowcount = len(self._resultSet)
             self._resultSetStatus = iter(range(len(self._resultSet)))
             column_names, column_types = self.parse_column_types(self._resultSetMetadata)
@@ -150,7 +192,7 @@ class Cursor(object):
                 self.description = tuple(
                     zip(
                         column_names,
-                        metadata,
+                        self.metadata,
                         [None for i in range(len(self._resultSet.dtypes.index))],
                         [None for i in range(len(self._resultSet.dtypes.index))],
                         [None for i in range(len(self._resultSet.dtypes.index))],
@@ -160,9 +202,7 @@ class Cursor(object):
                 )
                 return self
             except Exception as ex:
-                print("************************************")
-                print("Error in Cursor.execute", str(ex))
-                print("************************************")
+                logging.error(("Error in Cursor.execute", str(ex)))
 
     @connected
     def fetchone(self):
@@ -170,9 +210,7 @@ class Cursor(object):
             # Added Tuple
             return self._resultSet.iloc[next(self._resultSetStatus)]
         except StopIteration:
-            print("************************************")
-            print("Catched StopIteration in fetchone")
-            print("************************************")
+            logging.debug("Caught StopIteration in fetchone")
             # We need to put None rather than Series([]) because
             # SQLAlchemy processes that a row with no columns which it doesn't like
             return None
@@ -196,9 +234,7 @@ class Cursor(object):
             myresults = self._resultSet[index: index + fetch_size]
             return [tuple(x) for x in myresults.to_records(index=False)]
         except StopIteration:
-            print("************************************")
-            print("Catched StopIteration in fetchmany")
-            print("************************************")
+            logging.debug("Caught StopIteration in fetchmany")
             return None
 
     @connected
@@ -210,9 +246,8 @@ class Cursor(object):
             return [tuple(x) for x in remaining.to_records(index=False)]
 
         except StopIteration:
-            print("************************************")
-            print("Catched StopIteration in fetchall")
-            print("************************************")
+            logging.debug("Caught StopIteration in fetchall")
+            logging.debug((StopIteration.value, StopIteration.with_traceback()))
             return None
 
     @connected
@@ -240,9 +275,7 @@ class Connection(object):
 
         def func_wrapper(self, *args, **kwargs):
             if self._connected is False:
-                print("************************************")
-                print("ConnectionClosedException in func_wrapper")
-                print("************************************")
+                logging.error("ConnectionClosedException in func_wrapper")
                 raise ConnectionClosedException("Connection object is closed")
             else:
                 return func(self, *args, **kwargs)
@@ -283,9 +316,9 @@ class Connection(object):
     @connected
     def commit(self):
         if self._connected is False:
-            print("AlreadyClosedException")
+            logging.error("AlreadyClosedException")
         else:
-            print("Here goes some sort of commit")
+            logging.warning("Here goes some sort of commit")
 
     @connected
     def cursor(self):
@@ -328,16 +361,12 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
         )
 
     if response.status_code != 200:
-        print("************************************")
-        print("Error in connect")
-        print("************************************")
+        logging.error("Error in connect")
         raise DatabaseError(str(response.json()["errorMessage"]), response.status_code)
     else:
         raw_data = response.text
         if raw_data.find("Invalid username/password credentials") >= 0:
-            print("************************************")
-            print("Error in connect: ", response.text)
-            print("************************************")
+            logging.error("Error in connect: ", response.text)
             raise AuthError(str(raw_data), response.status_code)
 
         if db is not None:
@@ -353,10 +382,8 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
             )
 
             if response.status_code != 200:
-                print("************************************")
-                print("Error in connect")
-                print("Response code:", response.status_code)
-                print("************************************")
+                logging.error("Error in connect")
+                logging.error("Response code:", response.status_code)
                 raise DatabaseError(str(response.json()["errorMessage"]), response.status_code)
 
         return Connection(host, db, port, proto, session)

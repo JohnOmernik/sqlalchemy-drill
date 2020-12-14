@@ -12,26 +12,37 @@
 
 import os
 import sys
-import re
-
+import io
+from os import path
 from setuptools import setup, find_packages
 
 v = open(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'sqlalchemy_drill', '__init__.py'))
-VERSION = re.compile(r".*__version__ = '(.*?)'", re.S).match(v.read()).group(1)
 v.close()
 
-readme = os.path.join(os.path.dirname(__file__), 'README.md')
+
+this_directory = path.abspath(path.dirname(__file__))
+with io.open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
 
 setup(name='sqlalchemy_drill',
-      version=VERSION,
+      version='0.2.2',
       description="Apache Drill for SQLAlchemy",
-      long_description=open(readme).read(),
+      long_description=long_description,
+      long_description_content_type="text/markdown",
       classifiers=[
-          'Development Status :: 3 - Alpha',
+          'Development Status :: 4 - Beta',
           'Environment :: Console',
+          'License :: OSI Approved :: MIT License',
           'Intended Audience :: Developers',
           'Programming Language :: Python',
           'Programming Language :: Python :: 3',
+          'Programming Language :: Python :: 3.3',
+          'Programming Language :: Python :: 3.4',
+          'Programming Language :: Python :: 3.5',
+          'Programming Language :: Python :: 3.6',
+          'Programming Language :: Python :: 3.7',
+          'Programming Language :: Python :: 3.8',
+          'Programming Language :: Python :: 3.9',
           'Programming Language :: Python :: Implementation :: CPython',
           'Topic :: Database :: Front-Ends',
       ],
@@ -48,7 +59,9 @@ setup(name='sqlalchemy_drill',
       keywords='SQLAlchemy Apache Drill',
       author='John Omernik, Charles Givre, Davide Miceli, Massimo Martiradonna',
       author_email='john@omernik.com, cgivre@thedataist.com, davide.miceli.dap@gmail.com, massimo.martiradonna.dap@gmail.com',
-      license='Apache',
+      license='MIT',
+      url = 'https://github.com/JohnOmernik/sqlalchemy-drill',
+      download_url = 'https://github.com/JohnOmernik/sqlalchemy-drill/archive/0.1.tar.gz',
       packages=find_packages(),
       include_package_data=True,
       tests_require=['nose >= 0.11'],

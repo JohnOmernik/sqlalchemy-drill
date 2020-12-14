@@ -21,7 +21,8 @@
 
 from __future__ import absolute_import
 from __future__ import unicode_literals
-import jaydebeapi
+import jpype
+import jpype.dbapi2 as dbapi2
 import os
 import logging
 from .base import DrillDialect, DrillCompiler_sadrill
@@ -36,15 +37,16 @@ class DrillDialect_jdbc(DrillDialect):
 
     def __init__(self, *args, **kwargs):
         super(DrillDialect_jdbc, self).__init__(*args, **kwargs)
-        self.jdbc_driver_path = os.environ.get('DRILL_JDBC_DRIVER_PATH')
-        self.jdbc_jar_name = os.environ.get('DRILL_JDBC_JAR_NAME')
 
-        if self.jdbc_driver_path is None:
-            raise Exception('To connect to Drill via JDBC, you must set the DRILL_JDBC_DRIVER path to the location of the Drill JDBC driver.')
-
-        if self.jdbc_jar_name is None:
-            raise Exception(
-                'To connect to Drill via JDBC, you must set the DRILL_JDBC_JAR_NAME environment variable.')
+        # The user is responsible for starting the JVM with the class path, but we can
+        # do some sanity checks to make sure they are pointed in the right direction.
+        if not jpype.isJVMStarted():
+            raise Exception("The JVM must be started before connecting to a JDBC driver.")
+        try:
+            jpype.JClass("org.apache.drill.jdbc.Driver")
+        except TypeError:
+            err = "The drill JDBC driver class was not located in the CLASSPATH `%s`"%str(jpype.java.lang.System.getProperty('java.class.path'))
+            raise Exception(err)
 
     def initialize(self, connection):
         super(DrillDialect_jdbc, self).initialize(connection)
@@ -52,8 +54,7 @@ class DrillDialect_jdbc(DrillDialect):
     """
     Open a connection to a database using a JDBC driver and return
         a Connection instance.
-        jclassname: Full qualified Java class name of the JDBC driver.
-        url: Database url as required by the JDBC driver.
+        dsn: Database url as required by the JDBC driver.
         driver_args: Dictionary or sequence of arguments to be passed to
                the Java DriverManager.getConnection method. Usually
                sequence of username and password for the db. Alternatively
@@ -61,20 +62,16 @@ class DrillDialect_jdbc(DrillDialect):
                `password` would probably be included). See
                http://docs.oracle.com/javase/7/docs/api/java/sql/DriverManager.html
                for more details
-        jars: Jar filename or sequence of filenames for the JDBC driver
-        libs: Dll/so filenames or sequence of dlls/sos used as shared
-              library by the JDBC driver
         """
     def create_connect_args(self, url):
         if url is not None:
             params = super(DrillDialect, self).create_connect_args(url)[1]
-            driver = self.jdbc_driver_path + self.jdbc_jar_name
 
-            cargs = (self.jdbc_driver_name,
-                     self._create_jdbc_url(url),
-                     [params['username'], params['password']],
-                     driver)
-            cparams = {p: params[p] for p in params if p not in ['host', 'username', 'password', 'port']}
+            # We only need the dsn url as an argument
+            cargs = (self._create_jdbc_url(url), )
+
+            # Everything else is passed as keywords
+            cparams = {p: params[p] for p in params if p not in ['host', 'port']}
 
             logging.info("Cargs:" + str(cargs))
             logging.info("Cparams" + str(cparams))
@@ -89,6 +86,6 @@ class DrillDialect_jdbc(DrillDialect):
 
     @classmethod
     def dbapi(cls):
-        return jaydebeapi
+        return dbapi2
 
 dialect = DrillDialect_jdbc
