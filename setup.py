@@ -25,7 +25,7 @@ with io.open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(name='sqlalchemy_drill',
-      version='0.2.2',
+      version='0.3',
       description="Apache Drill for SQLAlchemy",
       long_description=long_description,
       long_description_content_type="text/markdown",
@@ -53,7 +53,7 @@ setup(name='sqlalchemy_drill',
           "sqlalchemy"
       ],
       extras_require={
-          "jdbc": ["JPype1==0.6.3", "JayDeBeApi"],
+          "jdbc": ["JPype1", "JayDeBeApi"],
           "odbc": ["pyodbc"],
       },
       keywords='SQLAlchemy Apache Drill',
