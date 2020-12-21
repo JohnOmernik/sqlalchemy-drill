@@ -19,7 +19,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-__version__ = '0.9'
+__version__ = '0.3'
 from sqlalchemy.dialects import registry
 
 registry.register("drill", "sqlalchemy_drill.sadrill", "DrillDialect_sadrill")
