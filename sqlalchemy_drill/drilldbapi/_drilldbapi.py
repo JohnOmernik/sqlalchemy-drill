@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 from json import dumps
 import pandas as pd
 from requests import Session
@@ -27,7 +28,7 @@ DRILL_PANDAS_TYPE_MAP = {
         'TIME': 'string' if pd.__version__ >= '1' else 'object',
         'TIMESTAMP': 'datetime64[ns]',
         'VARDECIMAL': 'object',
-        'VARCHAR' : 'string' if pd.__version__ >= '1' else 'object'
+        'VARCHAR' : 'string' if pd.__version__ >= '1' else 'object',
         }
 
 logging.basicConfig(level=logging.WARN)
@@ -139,6 +140,12 @@ class Cursor(object):
                     "type": self.metadata[i]
                 }
                 column_metadata.append(col)
+
+            for i in range(0, len(self.metadata)):
+                if(self.metadata[i] == "MAP"):
+                    k = self.columns[i]
+                    for r in self.rows:
+                        r[k] = json.loads(r[k])
 
             self._resultSetMetadata = column_metadata
 
