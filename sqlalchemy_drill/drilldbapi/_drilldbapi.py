@@ -160,7 +160,7 @@ class Cursor(object):
                     logging.debug('Mapping column {} of Drill type {} to dtype {}'.format(col_name, col_drill_type, col_dtype))
 
                     # Null values cause problems, so first verify if there are null values in the column
-                    if df[col_name].isnull().values.any():
+                    if df[col_name].isnull().values.any() or df.size == 0:
                         can_cast = False
                     elif str(df[col_name].iloc[0]).startswith("[") and str(df[col_name].iloc[0]).endswith("]"):
                         can_cast = False
