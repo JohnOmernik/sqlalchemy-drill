@@ -94,10 +94,13 @@ Currently we can connect to drill, and issue queries for most visualizations and
 to drillpy and pydrill for code used in creating the `drilldbapi.py` code for connecting!
 
 ### Docker 
-Get the superset repo and then in
+It is recommended to extend [the official Docker image](https://hub.docker.com/r/apache/superset) to include this Apache Drill driver:
 
-```python
-FROM supersetimage(not sure it's name)
-RUN python3 -m pip install git+https://github.com/JohnOmernik/sqlalchemy-drill.git
-CMD["superset"]
+```dockerfile
+FROM apache/superset
+# Switching to root to install the required packages
+USER root
+RUN pip install git+https://github.com/JohnOmernik/sqlalchemy-drill.git
+# Switching back to using the `superset` user
+USER superset
 ```
