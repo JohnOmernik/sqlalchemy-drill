@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from json import dumps
 import pandas as pd
+from pandas.api.types import is_integer_dtype
 from requests import Session
 import re
 import logging
@@ -200,8 +201,11 @@ class Cursor(object):
                             # df[col_name] = pd.to_timedelta(df[col_name])
                             # df[col_name] = pd.to_datetime()
                         elif col_drill_type in ('DATE', 'TIMESTAMP'):
-                            df[col_name] = pd.to_datetime(
-                                df[col_name], unit='ms')
+                            # The final astype() call is enough for Drill <= 1.18
+                            # Drill >= 1.19 returns UNIX time in millis
+                            if is_integer_dtype(df[col_name]):
+                                df[col_name] = pd.to_datetime(df[col_name], unit='ms')
+
                         elif col_drill_type in ['FLOAT4', 'FLOAT8']:
                             # coerce errors when parsing floats to handle 'NaN'
                             # ('Infinity' is fine)
