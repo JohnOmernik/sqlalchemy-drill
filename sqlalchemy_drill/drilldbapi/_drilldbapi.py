@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from json import dumps
 import pandas as pd
+from pandas.api.types import is_integer_dtype
 from requests import Session
 import re
 import logging
@@ -14,26 +15,28 @@ paramstyle = 'qmark'
 default_storage_plugin = ""
 
 DRILL_PANDAS_TYPE_MAP = {
-        'BIGINT': 'Int64',
-        'BINARY': 'object',
-        'BIT':  'boolean' if pd.__version__ >= '1' else 'bool',
-        'DATE': 'datetime64[ns]',
-        'FLOAT4': 'float32',
-        'FLOAT8': 'float64',
-        'INT': 'Int32',
-        'INTERVALDAY': 'string' if pd.__version__ >= '1' else 'object',
-        'INTERVALYEAR': 'string' if pd.__version__ >= '1' else 'object',
-        'SMALLINT': 'Int32',
-        'TIME': 'string' if pd.__version__ >= '1' else 'object',
-        'TIMESTAMP': 'datetime64[ns]',
-        'VARDECIMAL': 'object',
-        'VARCHAR' : 'string' if pd.__version__ >= '1' else 'object'
-        }
+    'BIGINT': 'Int64',
+    'BINARY': 'object',
+    'BIT':  'boolean' if pd.__version__ >= '1' else 'bool',
+    'DATE': 'datetime64[ns]',
+    'FLOAT4': 'float32',
+    'FLOAT8': 'float64',
+    'INT': 'Int32',
+    'INTERVALDAY': 'string' if pd.__version__ >= '1' else 'object',
+    'INTERVALYEAR': 'string' if pd.__version__ >= '1' else 'object',
+    'SMALLINT': 'Int32',
+    'TIME': 'string' if pd.__version__ >= '1' else 'object',
+    'TIMESTAMP': 'datetime64[ns]',
+    'VARDECIMAL': 'object',
+    'VARCHAR': 'string' if pd.__version__ >= '1' else 'object'
+}
 
 logging.basicConfig(level=logging.WARN)
 logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s')
 
 # Python DB API 2.0 classes
+
+
 class Cursor(object):
 
     def __init__(self, host, db, port, proto, session, conn):
@@ -72,7 +75,8 @@ class Cursor(object):
         try:
             for param in parameters:
                 if type(param) == str:
-                    query = query.replace("?", "'{param}'".format(param=param), 1)
+                    query = query.replace(
+                        "?", "'{param}'".format(param=param), 1)
                 else:
                     query = query.replace("?", str(param), 1)
         except Exception as ex:
@@ -84,7 +88,7 @@ class Cursor(object):
         local_payload = api_globals._PAYLOAD.copy()
         local_payload["query"] = query
         return session.post(
-            proto + host + ":" + str(port) + "/query.json",
+            f"{proto}{host}:{port}/query.json",
             data=dumps(local_payload),
             headers=api_globals._HEADER,
             timeout=None
@@ -118,13 +122,15 @@ class Cursor(object):
             self._session
         )
 
-        matchObj = re.match(r'^SHOW FILES FROM\s(.+)', operation, re.IGNORECASE)
+        matchObj = re.match(r'^SHOW FILES FROM\s(.+)',
+                            operation, re.IGNORECASE)
         if matchObj:
             self.default_storage_plugin = matchObj.group(1)
 
         if result.status_code != 200:
             logging.error("Error in Cursor.execute")
-            raise ProgrammingError(result.json().get("errorMessage", "ERROR"), result.status_code)
+            raise ProgrammingError(result.json().get(
+                "errorMessage", "ERROR"), result.status_code)
         else:
             result_json = result.json()
             self.cols = result_json["columns"]
@@ -142,7 +148,10 @@ class Cursor(object):
 
             self._resultSetMetadata = column_metadata
 
-            df = pd.DataFrame(result_json["rows"], columns=result_json["columns"])
+            df = pd.DataFrame(
+                result_json["rows"],
+                columns=result_json["columns"]
+            )
 
             # The columns in df all have a dtype of object because Drill's
             # HTTP API always quotes the values in the JSON it returns, thereby
@@ -150,16 +159,24 @@ class Cursor(object):
             # the metadata returned by Drill to correct this
             for i in range(len(self.columns)):
                 col_name = self.columns[i]
-                # strip any precision information that might be in the metdata e.g. VARCHAR(10)
+                # strip any precision information that might be in the metdata
+                # e.g. VARCHAR(10)
                 col_drill_type = re.sub(r'\(.*\)', '', self.metadata[i])
 
                 if col_drill_type not in DRILL_PANDAS_TYPE_MAP:
-                    logging.warning("Warning: could not map Drill column {} of type {} to a Pandas dtype".format(self.cols[i], self.metadata[i]))
+                    logging.warning(
+                        f"Warning: could not map Drill column {self.cols[i]} of  "
+                        f"type {self.metadata[i]} to a Pandas dtype"
+                    )
                 else:
                     col_dtype = DRILL_PANDAS_TYPE_MAP[col_drill_type]
-                    logging.debug('Mapping column {} of Drill type {} to dtype {}'.format(col_name, col_drill_type, col_dtype))
+                    logging.debug(
+                        f'Mapping column {col_name} of Drill type {col_drill_type} '
+                        f'to dtype {col_dtype}'
+                    )
 
-                    # Null values cause problems, so first verify if there are null values in the column
+                    # Null values cause problems, so first verify if there are
+                    # null values in the column
                     if df[col_name].isnull().values.any() or df.size == 0:
                         can_cast = False
                     elif str(df[col_name].iloc[0]).startswith("[") and str(df[col_name].iloc[0]).endswith("]"):
@@ -169,21 +186,39 @@ class Cursor(object):
 
                         if col_drill_type == 'BIT':
                             if pd.__version__ < '1' and df[col_name].isna().any():
-                                logger.warn('Null boolean values will be coerced to False!  Upgrade to Pandas >= 1.0 for nullable booleans.')
-                            df[col_name] = df[col_name].apply(lambda b: b == 'true' if b else None)
-                        # Commenting this out for the time being. Pandas does not seem to support time data types (times with no dates) and hence
-                        # this functionality breaks Superset. 
-                        #elif col_drill_type == 'TIME': # col_name in ['TIME', 'INTERVAL']: # parsing of ISO-8601 intervals appears broken as of Pandas 1.0.3
-                            #logging.warning("Time Column: {} {}".format(col_name, df[col_name].iloc[0]))
-                            #df[col_name] = pd.to_timedelta(df[col_name])
-                            #df[col_name] = pd.to_datetime()
+                                logging.warn(
+                                    'Null boolean values will be coerced to False!'
+                                    '  Upgrade to Pandas >= 1.0 for nullable booleans.'
+                                )
+                            df[col_name] = df[col_name].apply(
+                                lambda b: b == 'true' if b else None)
+                        # Commenting this out for the time being. Pandas does
+                        # not seem to support time data types (times with no
+                        # dates) and hence this functionality breaks Superset.
+                        # Parsing of ISO-8601 intervals appears broken as of Pandas 1.0.3
+                        # elif col_drill_type in ['TIME', 'INTERVAL']:
+                            # logging.warning("Time Column: {} {}".format(col_name, df[col_name].iloc[0]))
+                            # df[col_name] = pd.to_timedelta(df[col_name])
+                            # df[col_name] = pd.to_datetime()
+                        elif col_drill_type in ('DATE', 'TIMESTAMP'):
+                            # The final astype() call is enough for Drill <= 1.18
+                            # Drill >= 1.19 returns UNIX time in millis
+                            if is_integer_dtype(df[col_name]):
+                                df[col_name] = pd.to_datetime(df[col_name], unit='ms')
+
                         elif col_drill_type in ['FLOAT4', 'FLOAT8']:
-                            # coerce errors when parsing floats to handle 'NaN' ('Infinity' is fine)
-                            df[col_name] = pd.to_numeric(df[col_name], errors='coerce')
+                            # coerce errors when parsing floats to handle 'NaN'
+                            # ('Infinity' is fine)
+                            df[col_name] = pd.to_numeric(
+                                df[col_name], errors='coerce')
                         elif col_drill_type in ['BIGINT', 'INT', 'SMALLINT']:
                             df[col_name] = pd.to_numeric(df[col_name])
                             if df[col_name].isnull().values.any():
-                                logging.warning('Column {} of Drill type {} contains nulls so cannot be converted to an integer dtype in Pandas < 1.0.0'.format(col_name, col_drill_type))
+                                logging.warning(
+                                    f'Column {col_name} of Drill type {col_drill_type}'
+                                    ' contains nulls so cannot be converted to an'
+                                    ' integer dtype in Pandas < 1.0.0'
+                                )
                                 can_cast = False
 
                     if can_cast:
@@ -193,7 +228,8 @@ class Cursor(object):
 
             self.rowcount = len(self._resultSet)
             self._resultSetStatus = iter(range(len(self._resultSet)))
-            column_names, column_types = self.parse_column_types(self._resultSetMetadata)
+            column_names, column_types = self.parse_column_types(
+                self._resultSetMetadata)
 
             try:
                 self.description = tuple(
@@ -254,7 +290,8 @@ class Cursor(object):
 
         except StopIteration:
             logging.debug("Caught StopIteration in fetchall")
-            logging.debug((StopIteration.value, StopIteration.with_traceback()))
+            logging.debug(
+                (StopIteration.value, StopIteration.with_traceback()))
             return None
 
     @connected
@@ -353,7 +390,7 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
         local_payload = api_globals._PAYLOAD.copy()
         local_payload["query"] = "show schemas"
         response = session.post(
-            "{proto}{host}:{port}{url}".format(proto=proto, host=host, port=str(port), url=local_url),
+            f"{proto}{host}:{port}{local_url}",
             data=dumps(local_payload),
             headers=api_globals._HEADER
         )
@@ -363,13 +400,14 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
         local_payload["j_username"] = drilluser
         local_payload["j_password"] = drillpass
         response = session.post(
-            "{proto}{host}:{port}{url}".format(proto=proto, host=host, port=str(port), url=local_url),
+            f"{proto}{host}:{port}{local_url}",
             data=local_payload
         )
 
     if response.status_code != 200:
         logging.error("Error in connect")
-        raise DatabaseError(str(response.json()["errorMessage"]), response.status_code)
+        raise DatabaseError(
+            str(response.json()["errorMessage"]), response.status_code)
     else:
         raw_data = response.text
         if raw_data.find("Invalid username/password credentials") >= 0:
@@ -383,7 +421,7 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
             local_payload["query"] = "SELECT 'test' FROM (VALUES(1))"
 
             response = session.post(
-                "{proto}{host}:{port}{url}".format(proto=proto, host=host, port=str(port), url=local_url),
+                f"{proto}{host}:{port}{local_url}",
                 data=dumps(local_payload),
                 headers=api_globals._HEADER
             )
@@ -391,6 +429,7 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
             if response.status_code != 200:
                 logging.error("Error in connect")
                 logging.error("Response code:", response.status_code)
-                raise DatabaseError(str(response.json()["errorMessage"]), response.status_code)
+                raise DatabaseError(
+                    str(response.json()["errorMessage"]), response.status_code)
 
         return Connection(host, db, port, proto, session)

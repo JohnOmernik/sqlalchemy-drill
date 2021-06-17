@@ -43,7 +43,14 @@ In order to configure SQLAlchemy to work with Drill via JDBC you must:
 Additionally, you will need to install `JayDeBeApi` as well as jPype version 0.6.3.  
 These modules are listed as optional dependencies and will not be installed by the default installer. 
 
-If the JDBC driver is not available, the dialect will throw errors when trying to connect.
+If the JDBC driver is not available, the dialect will throw errors when trying
+to connect. In addition, sqlalchemy-drill will not launch a JVM for you so you
+need to do this yourself with a call to JPype like the following. See the file
+test-jdbc.py in this repo for a working example.
+
+```python
+jpype.startJVM("-ea", classpath="lib/*")
+```
 
 ```
 drill+jdbc://<username>:<passsword>@<host>:<port>
