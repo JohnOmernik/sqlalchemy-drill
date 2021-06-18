@@ -133,6 +133,10 @@ class Cursor(object):
                 "errorMessage", "ERROR"), result.status_code)
         else:
             result_json = result.json()
+
+            if "columns" not in result_json:
+                raise DatabaseError("Query found no data", None)
+
             self.cols = result_json["columns"]
             self.columns = self.cols
             self.metadata = result_json["metadata"]
