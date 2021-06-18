@@ -29,7 +29,7 @@ with io.open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(name='sqlalchemy_drill',
-      version='0.3.1',
+      version='1.0.0',
       description="Apache Drill for SQLAlchemy",
       long_description=long_description,
       long_description_content_type="text/markdown",
@@ -62,7 +62,7 @@ setup(name='sqlalchemy_drill',
       author_email='john@omernik.com, cgivre@thedataist.com, davide.miceli.dap@gmail.com, massimo.martiradonna.dap@gmail.com',
       license='MIT',
       url = 'https://github.com/JohnOmernik/sqlalchemy-drill',
-      download_url = 'https://github.com/JohnOmernik/sqlalchemy-drill/archive/0.3.1.tar.gz',
+      download_url = 'https://github.com/JohnOmernik/sqlalchemy-drill/archive/1.0.0.tar.gz',
       packages=find_packages(),
       include_package_data=True,
       tests_require=['nose >= 0.11'],
