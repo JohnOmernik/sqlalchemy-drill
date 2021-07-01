@@ -29,7 +29,7 @@ with io.open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(name='sqlalchemy_drill',
-      version='1.0.0',
+      version='1.1.0',
       description="Apache Drill for SQLAlchemy",
       long_description=long_description,
       long_description_content_type="text/markdown",
@@ -49,8 +49,7 @@ setup(name='sqlalchemy_drill',
       ],
       install_requires=[
           "requests",
-          "numpy",
-          "pandas",
+          "ijson",
           "sqlalchemy"
       ],
       extras_require={
@@ -58,11 +57,14 @@ setup(name='sqlalchemy_drill',
           "odbc": ["pyodbc"],
       },
       keywords='SQLAlchemy Apache Drill',
-      author='John Omernik, Charles Givre, Davide Miceli, Massimo Martiradonna',
-      author_email='john@omernik.com, cgivre@thedataist.com, davide.miceli.dap@gmail.com, massimo.martiradonna.dap@gmail.com',
+      author='John Omernik, Charles Givre, Davide Miceli, Massimo Martiradonna'
+      ', James Turton',
+      author_email='john@omernik.com, cgivre@thedataist.com, davide.miceli.dap'
+      '@gmail.com, massimo.martiradonna.dap@gmail.com, james@somecomputer.xyz',
       license='MIT',
-      url = 'https://github.com/JohnOmernik/sqlalchemy-drill',
-      download_url = 'https://github.com/JohnOmernik/sqlalchemy-drill/archive/1.0.0.tar.gz',
+      url='https://github.com/JohnOmernik/sqlalchemy-drill',
+      download_url='https://github.com/JohnOmernik/sqlalchemy-drill/archive/'
+      '1.1.0.tar.gz',
       packages=find_packages(),
       include_package_data=True,
       tests_require=['nose >= 0.11'],
@@ -76,4 +78,4 @@ setup(name='sqlalchemy_drill',
               'drill.odbc = sqlalchemy_drill.odbc:DrillDialect_odbc',
           ]
       }
-    )
+      )

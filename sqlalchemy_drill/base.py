@@ -58,6 +58,7 @@ _type_map = {
     'json': types.JSON,
 }
 
+
 class DrillCompiler_sadrill(compiler.SQLCompiler):
 
     def default_from(self):
@@ -76,13 +77,16 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
             try:
                 fixed_schema = ""
                 if table.schema != "":
-                    fixed_schema = ".".join(["`{i}`".format(i=i.replace('`', '')) for i in table.schema.split(".")])
+                    fixed_schema = ".".join(
+                        ["`{i}`".format(i=i.replace('`', '')) for i in table.schema.split(".")])
                 fixed_table = "{fixed_schema}.`{table_name}`".format(
-                    fixed_schema=fixed_schema,table_name=table.name.replace("`", "")
+                    fixed_schema=fixed_schema, table_name=table.name.replace(
+                        "`", "")
                 )
                 return fixed_table
             except Exception as ex:
-                logging.error( "Error in DrillCompiler_sadrill.visit_table :: " + str(ex))
+                logging.error(
+                    "Error in DrillCompiler_sadrill.visit_table :: " + str(ex))
 
         else:
             return ""
@@ -151,7 +155,8 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
     )
 
     def __init__(self, dialect):
-        super(DrillIdentifierPreparer, self).__init__(dialect, initial_quote='`', final_quote='`')
+        super(DrillIdentifierPreparer, self).__init__(
+            dialect, initial_quote='`', final_quote='`')
 
     def format_drill_table(self, schema, isFile=True):
         formatted_schema = ""
@@ -171,7 +176,8 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
         elif isFile and num_dots == 2:
             # Case for file and no workspace
             plugin = schema_parts[0]
-            formatted_schema = plugin + "." + schema_parts[1] + ".`" + schema_parts[2] + "`"
+            formatted_schema = plugin + "." + \
+                schema_parts[1] + ".`" + schema_parts[2] + "`"
         else:
             # Case for non-file plugins or incomplete schema parts
             for part in schema_parts:
@@ -182,7 +188,6 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
                     formatted_schema = quoted_part
 
         return formatted_schema
-
 
 
 class DrillDialect(default.DefaultDialect):
@@ -242,7 +247,8 @@ class DrillDialect(default.DefaultDialect):
                 if url.password:
                     qargs['drillpass'] = url.password
         except Exception as ex:
-            logging.error("Error in DrillDialect_sadrill.create_connect_args :: " + str(ex))
+            logging.error(
+                "Error in DrillDialect_sadrill.create_connect_args :: " + str(ex))
 
         return [], qargs
 
@@ -274,7 +280,8 @@ class DrillDialect(default.DefaultDialect):
                 if row.SCHEMA_NAME != "cp.default" and row.SCHEMA_NAME != "INFORMATION_SCHEMA" and row.SCHEMA_NAME != "dfs.default":
                     result.append(row.SCHEMA_NAME)
         except Exception as ex:
-            logging.error(("Error in DrillDialect_sadrill.get_schema_names :: ", str(ex)))
+            logging.error(
+                ("Error in DrillDialect_sadrill.get_schema_names :: ", str(ex)))
 
         return tuple(result)
 
@@ -312,7 +319,8 @@ class DrillDialect(default.DefaultDialect):
                     tables_names.append(myname)
 
             except Exception as ex:
-                logging.error("Error in DrillDialect_sadrill.get_table_names :: " + str(ex))
+                logging.error(
+                    "Error in DrillDialect_sadrill.get_table_names :: " + str(ex))
 
             return tuple(tables_names)
         else:
@@ -328,20 +336,23 @@ class DrillDialect(default.DefaultDialect):
                     tables_names.append(myname)
 
             except Exception as ex:
-                logging.error("Error in DrillDialect_sadrill.get_table_names :: " + str(ex))
+                logging.error(
+                    "Error in DrillDialect_sadrill.get_table_names :: " + str(ex))
 
             return tuple(tables_names)
 
     def get_view_names(self, connection, schema=None, **kw):
         view_names = []
-        curs = connection.execute("SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.views WHERE table_schema='" + schema + "'")
+        curs = connection.execute(
+            "SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.views WHERE table_schema='" + schema + "'")
         try:
             for row in curs:
                 myname = row.TABLE_NAME
                 view_names.append(myname)
 
         except Exception as ex:
-            logging.error("Error in DrillDialect_sadrill.get_view_names :: " + str(ex))
+            logging.error(
+                "Error in DrillDialect_sadrill.get_view_names :: " + str(ex))
 
         return tuple(view_names)
 
@@ -350,7 +361,8 @@ class DrillDialect(default.DefaultDialect):
             self.get_columns(connection, table_name, schema)
             return True
         except exc.NoSuchTableError:
-            logging.error("Error in DrillDialect_sadrill.has_table :: " + exc.NoSuchTableError)
+            logging.error(
+                "Error in DrillDialect_sadrill.has_table :: " + exc.NoSuchTableError)
             return False
 
     def _check_unicode_returns(self, connection, additional_tests=None):
@@ -381,21 +393,26 @@ class DrillDialect(default.DefaultDialect):
         if plugin_type == "file" or plugin_type == "mongo":
             views = self.get_view_names(connection, schema)
 
-
             file_name = schema + "." + table_name
-            quoted_file_name = self.identifier_preparer.format_drill_table(file_name, isFile=True)
+            quoted_file_name = self.identifier_preparer.format_drill_table(
+                file_name, isFile=True)
 
             # Since MongoDB uses the ** notation, bypass that and query the data directly.
             if plugin_type == "mongo":
                 print("FILE NAME:", file_name, quoted_file_name)
-                mongo_quoted_file_name = self.identifier_preparer.format_drill_table(file_name, isFile=False)
-                q = "SELECT `**` FROM {table_name} LIMIT 1".format(table_name=mongo_quoted_file_name)
+                mongo_quoted_file_name = self.identifier_preparer.format_drill_table(
+                    file_name, isFile=False)
+                q = "SELECT `**` FROM {table_name} LIMIT 1".format(
+                    table_name=mongo_quoted_file_name)
             elif table_name in views:
                 logging.debug("View: ", quoted_file_name, table_name, schema)
-                view_name = "`{schema}`.`{table_name}`".format(schema=schema, table_name=table_name)
-                q = "SELECT * FROM {file_name} LIMIT 1".format(file_name=view_name)
+                view_name = "`{schema}`.`{table_name}`".format(
+                    schema=schema, table_name=table_name)
+                q = "SELECT * FROM {file_name} LIMIT 1".format(
+                    file_name=view_name)
             else:
-                q = "SELECT * FROM {file_name} LIMIT 1".format(file_name=quoted_file_name)
+                q = "SELECT * FROM {file_name} LIMIT 1".format(
+                    file_name=quoted_file_name)
 
             column_metadata = connection.execute(q).cursor.description
 
@@ -419,7 +436,8 @@ class DrillDialect(default.DefaultDialect):
         elif "SELECT " in table_name:
             q = "SELECT * FROM ({table_name}) LIMIT 1".format(table_name=table_name)
         else:
-            quoted_schema = self.identifier_preparer.format_drill_table(schema + "." + table_name, isFile=False)
+            quoted_schema = self.identifier_preparer.format_drill_table(
+                schema + "." + table_name, isFile=False)
             q = "DESCRIBE {table_name}".format(table_name=quoted_schema)
         logging.debug("QUERY:" + q)
         query_results = connection.execute(q)
@@ -451,6 +469,6 @@ class DrillDialect(default.DefaultDialect):
             return plugin_type
 
         except Exception as ex:
-            logging.error("Error in DrillDialect_sadrill.get_plugin_type :: " + str(ex))
+            logging.error(
+                "Error in DrillDialect_sadrill.get_plugin_type :: " + str(ex))
             return False
-

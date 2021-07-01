@@ -1,73 +1,29 @@
 # -*- coding: utf-8 -*-
 from json import dumps
-import pandas as pd
-from pandas.api.types import is_integer_dtype
-from requests import Session
+from typing import List
+from requests import Session, Response
 import re
 import logging
+from ijson import parse
+from ijson.common import ObjectBuilder
+from itertools import chain, islice
+from datetime import date, time, datetime
+from time import gmtime
 from . import api_globals
-from .api_exceptions import AuthError, DatabaseError, ProgrammingError, CursorClosedException, \
-    ConnectionClosedException
+from .api_exceptions import AuthError, DatabaseError, ProgrammingError, \
+    CursorClosedException, ConnectionClosedException
 
 apilevel = '2.0'
 threadsafety = 3
 paramstyle = 'qmark'
-default_storage_plugin = ""
+default_storage_plugin = ''
 
-DRILL_PANDAS_TYPE_MAP = {
-    'BIGINT': 'Int64',
-    'BINARY': 'object',
-    'BIT':  'boolean' if pd.__version__ >= '1' else 'bool',
-    'DATE': 'datetime64[ns]',
-    'FLOAT4': 'float32',
-    'FLOAT8': 'float64',
-    'INT': 'Int32',
-    'INTERVALDAY': 'string' if pd.__version__ >= '1' else 'object',
-    'INTERVALYEAR': 'string' if pd.__version__ >= '1' else 'object',
-    'SMALLINT': 'Int32',
-    'TIME': 'string' if pd.__version__ >= '1' else 'object',
-    'TIMESTAMP': 'datetime64[ns]',
-    'VARDECIMAL': 'object',
-    'VARCHAR': 'string' if pd.__version__ >= '1' else 'object'
-}
-
-logging.basicConfig(level=logging.WARN)
-logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger('drilldbapi')
 
 # Python DB API 2.0 classes
 
 
 class Cursor(object):
-
-    def __init__(self, host, db, port, proto, session, conn):
-
-        self.arraysize = 1
-        self.db = db
-        self.description = None
-        self.host = host
-        self.port = port
-        self.proto = proto
-        self._session = session
-        self._connected = True
-        self.connection = conn
-        self._resultSet = None
-        self._resultSetMetadata = None
-        self._resultSetStatus = None
-        self.rowcount = -1
-
-    # Decorator for methods which require connection
-    def connected(func):
-        def func_wrapper(self, *args, **kwargs):
-            if self._connected is False:
-                logging.error("Error in Cursor.func_wrapper")
-                raise CursorClosedException("Cursor object is closed")
-            elif self.connection._connected is False:
-                logging.error("Error in Cursor.func_wrapper")
-                raise ConnectionClosedException("Connection object is closed")
-            else:
-                return func(self, *args, **kwargs)
-
-        return func_wrapper
 
     @staticmethod
     def substitute_in_query(string_query, parameters):
@@ -75,305 +31,362 @@ class Cursor(object):
         try:
             for param in parameters:
                 if type(param) == str:
-                    query = query.replace(
-                        "?", "'{param}'".format(param=param), 1)
-                else:
-                    query = query.replace("?", str(param), 1)
+                    param = f"'{param}'"
+
+                query.replace('?', param, 1)
+                logger.debug(f'set parameter value {param}')
         except Exception as ex:
-            logging.error("Error in Cursor.substitute_in_query" + str(ex))
-        return query
-
-    @staticmethod
-    def submit_query(query, host, port, proto, session):
-        local_payload = api_globals._PAYLOAD.copy()
-        local_payload["query"] = query
-        return session.post(
-            f"{proto}{host}:{port}/query.json",
-            data=dumps(local_payload),
-            headers=api_globals._HEADER,
-            timeout=None
-        )
-
-    @staticmethod
-    def parse_column_types(metadata):
-        names = []
-        types = []
-        for row in metadata:
-            names.append(row['column'])
-            types.append(row['type'].lower())
-
-        return names, types
-
-    @connected
-    def getdesc(self):
-        return self.description
-
-    @connected
-    def close(self):
-        self._connected = False
-
-    @connected
-    def execute(self, operation, parameters=()):
-        result = self.submit_query(
-            self.substitute_in_query(operation, parameters),
-            self.host,
-            self.port,
-            self.proto,
-            self._session
-        )
-
-        matchObj = re.match(r'^SHOW FILES FROM\s(.+)',
-                            operation, re.IGNORECASE)
-        if matchObj:
-            self.default_storage_plugin = matchObj.group(1)
-
-        if result.status_code != 200:
-            logging.error("Error in Cursor.execute")
-            raise ProgrammingError(result.json().get(
-                "errorMessage", "ERROR"), result.status_code)
-        else:
-            result_json = result.json()
-
-            if "columns" not in result_json:
-                raise DatabaseError("Query found no data", None)
-
-            self.cols = result_json["columns"]
-            self.columns = self.cols
-            self.metadata = result_json["metadata"]
-
-            # Get column metadata
-            column_metadata = []
-            for i in range(0, len(self.cols)):
-                col = {
-                    "column": self.cols[i],
-                    "type": self.metadata[i]
-                }
-                column_metadata.append(col)
-
-            self._resultSetMetadata = column_metadata
-
-            df = pd.DataFrame(
-                result_json["rows"],
-                columns=result_json["columns"]
+            logger.error(f'query parameter substitution encountered {ex}.')
+            raise ProgrammingError(
+                'Could not substitute query parameter values',
+                None
             )
 
-            # The columns in df all have a dtype of object because Drill's
-            # HTTP API always quotes the values in the JSON it returns, thereby
-            # providing DataFrame(...) with a dict of strings.  We now use
-            # the metadata returned by Drill to correct this
-            for i in range(len(self.columns)):
-                col_name = self.columns[i]
-                # strip any precision information that might be in the metdata
-                # e.g. VARCHAR(10)
-                col_drill_type = re.sub(r'\(.*\)', '', self.metadata[i])
+        return query
 
-                if col_drill_type not in DRILL_PANDAS_TYPE_MAP:
-                    logging.warning(
-                        f"Warning: could not map Drill column {self.cols[i]} of  "
-                        f"type {self.metadata[i]} to a Pandas dtype"
-                    )
-                else:
-                    col_dtype = DRILL_PANDAS_TYPE_MAP[col_drill_type]
-                    logging.debug(
-                        f'Mapping column {col_name} of Drill type {col_drill_type} '
-                        f'to dtype {col_dtype}'
-                    )
+    def __init__(self, conn):
 
-                    # Null values cause problems, so first verify if there are
-                    # null values in the column
-                    if df[col_name].isnull().values.any() or df.size == 0:
-                        can_cast = False
-                    elif str(df[col_name].iloc[0]).startswith("[") and str(df[col_name].iloc[0]).endswith("]"):
-                        can_cast = False
-                    else:
-                        can_cast = True
+        self.arraysize: int = 200
+        self.description: tuple = None
+        self.connection = conn
+        self.rowcount: int = -1
+        self.rownumber: int = None
+        self.result_md = {}
 
-                        if col_drill_type == 'BIT':
-                            if pd.__version__ < '1' and df[col_name].isna().any():
-                                logging.warn(
-                                    'Null boolean values will be coerced to False!'
-                                    '  Upgrade to Pandas >= 1.0 for nullable booleans.'
-                                )
-                            df[col_name] = df[col_name].apply(
-                                lambda b: b == 'true' if b else None)
-                        # Commenting this out for the time being. Pandas does
-                        # not seem to support time data types (times with no
-                        # dates) and hence this functionality breaks Superset.
-                        # Parsing of ISO-8601 intervals appears broken as of Pandas 1.0.3
-                        # elif col_drill_type in ['TIME', 'INTERVAL']:
-                            # logging.warning("Time Column: {} {}".format(col_name, df[col_name].iloc[0]))
-                            # df[col_name] = pd.to_timedelta(df[col_name])
-                            # df[col_name] = pd.to_datetime()
-                        elif col_drill_type in ('DATE', 'TIMESTAMP'):
-                            # The final astype() call is enough for Drill <= 1.18
-                            # Drill >= 1.19 returns UNIX time in millis
-                            if is_integer_dtype(df[col_name]):
-                                df[col_name] = pd.to_datetime(df[col_name], unit='ms')
+        self._is_open: bool = True
+        self._result_event_stream = self._row_stream = None
+        self._typecasters: list = None
 
-                        elif col_drill_type in ['FLOAT4', 'FLOAT8']:
-                            # coerce errors when parsing floats to handle 'NaN'
-                            # ('Infinity' is fine)
-                            df[col_name] = pd.to_numeric(
-                                df[col_name], errors='coerce')
-                        elif col_drill_type in ['BIGINT', 'INT', 'SMALLINT']:
-                            df[col_name] = pd.to_numeric(df[col_name])
-                            if df[col_name].isnull().values.any():
-                                logging.warning(
-                                    f'Column {col_name} of Drill type {col_drill_type}'
-                                    ' contains nulls so cannot be converted to an'
-                                    ' integer dtype in Pandas < 1.0.0'
-                                )
-                                can_cast = False
-
-                    if can_cast:
-                        df[col_name] = df[col_name].astype(col_dtype)
-
-            self._resultSet = df
-
-            self.rowcount = len(self._resultSet)
-            self._resultSetStatus = iter(range(len(self._resultSet)))
-            column_names, column_types = self.parse_column_types(
-                self._resultSetMetadata)
-
-            try:
-                self.description = tuple(
-                    zip(
-                        column_names,
-                        self.metadata,
-                        [None for i in range(len(self._resultSet.dtypes.index))],
-                        [None for i in range(len(self._resultSet.dtypes.index))],
-                        [None for i in range(len(self._resultSet.dtypes.index))],
-                        [None for i in range(len(self._resultSet.dtypes.index))],
-                        [True for i in range(len(self._resultSet.dtypes.index))]
-                    )
-                )
-                return self
-            except Exception as ex:
-                logging.error(("Error in Cursor.execute", str(ex)))
-
-    @connected
-    def fetchone(self):
-        try:
-            # Added Tuple
-            return self._resultSet.iloc[next(self._resultSetStatus)]
-        except StopIteration:
-            logging.debug("Caught StopIteration in fetchone")
-            # We need to put None rather than Series([]) because
-            # SQLAlchemy processes that a row with no columns which it doesn't like
-            return None
-
-    @connected
-    def fetchmany(self, size=None):
-
-        if size is None:
-            fetch_size = self.arraysize
-        else:
-            fetch_size = size
-
-        try:
-            index = next(self._resultSetStatus)
-            try:
-                for element in range(fetch_size - 1):
-                    next(self._resultSetStatus)
-            except StopIteration:
-                pass
-
-            myresults = self._resultSet[index: index + fetch_size]
-            return [tuple(x) for x in myresults.to_records(index=False)]
-        except StopIteration:
-            logging.debug("Caught StopIteration in fetchmany")
-            return None
-
-    @connected
-    def fetchall(self):
-        # We can't just return a dataframe to sqlalchemy, it has to be a list of tuples...
-        try:
-            remaining = self._resultSet[next(self._resultSetStatus):]
-            self._resultSetStatus = iter(tuple())
-            return [tuple(x) for x in remaining.to_records(index=False)]
-
-        except StopIteration:
-            logging.debug("Caught StopIteration in fetchall")
-            logging.debug(
-                (StopIteration.value, StopIteration.with_traceback()))
-            return None
-
-    @connected
-    def get_query_metadata(self):
-        return self._resultSetMetadata
-
-    def get_default_plugin(self):
-        return self.default_storage_plugin
-
-    def __iter__(self):
-        return self._resultSet.iterrows()
-
-
-class Connection(object):
-    def __init__(self, host, db, port, proto, session):
-        self.host = host
-        self.db = db
-        self.proto = proto
-        self.port = port
-        self._session = session
-        self._connected = True
-
-    # Decorator for methods which require connection
-    def connected(func):
+    def is_open(func):
+        '''Decorator for methods which require a connection'''
 
         def func_wrapper(self, *args, **kwargs):
-            if self._connected is False:
-                logging.error("ConnectionClosedException in func_wrapper")
-                raise ConnectionClosedException("Connection object is closed")
+            if self._is_open is False:
+                raise CursorClosedException(
+                    f'Cannot call {func} with a closed cursor.'
+                )
+            elif self.connection._connected is False:
+                raise ConnectionClosedException(
+                    f'Cannot call {func} with a closed connection.'
+                )
             else:
                 return func(self, *args, **kwargs)
 
         return func_wrapper
 
-    def is_connected(self):
+    def _typecast(self, row) -> tuple:
+        '''Internal method to cast REST API values to Python types'''
+        return tuple((f(v) for f, v in zip(self._typecasters, row)))
+
+    def _report_query_state(self):
+        md = self.result_md
+        query_state = md.get('queryState', None)
+        logger.info(
+            f'received final query state {query_state}.'
+        )
+
+        if query_state != 'COMPLETED':
+            logger.warning(
+                md.get(
+                    'exception',
+                    'No exception returned, c.f. drill.exec.http.rest.errors.verbose.'
+                )
+            )
+            logger.warning(
+                md.get('errorMessage', 'No error message returned.'))
+            logger.warning(md.get('stackTrace', 'No stack trace returned.'))
+
+            raise DatabaseError(
+                f'Final Drill query state is {query_state}',
+                None
+            )
+
+    def _outer_parsing_loop(self) -> bool:
+        '''Internal method to process the outermost query result JSON structure.
+
+        This loop will parse result JSON, recording metadata as it goes, until
+        it either encounters row data or the end of the result stream.  If row
+        data is encountered then parsing is halted in order that it can be driven
+        in a streaming fashion by the user making calls to the fetchN() methods.
+
+        Since there is also result metadata found _after_ row data, the fetchN()
+        methods should start this loop again once they've encountered the end of
+        the row data.
+
+        Returns True iff row data is encountered in the result.
+        '''
         try:
-            if self._connected is True:
-                if self._session:
+            while True:
+                prefix, event, value = next(self._result_event_stream)
+                logger.debug(f'ijson parsed {prefix}, {event}, {value}')
+
+                if event != 'map_key':
+                    continue
+
+                if value == 'rows':
+                    self._row_stream = _items_once(
+                        self._result_event_stream, 'rows.item'
+                    )
+                    # stop here so that row parsing can be driven by user calls
+                    # to fetchN
                     return True
                 else:
-                    self._connected = False
-        except Exception:
-            print('*************************')
-            print("Error in Connection.is_connected")
-            print('*************************')
-            print(Exception)
+                    # save the parsed object to the result metadata dict
+                    self.result_md[value] = next(
+                        _items_once(self._result_event_stream, value)
+                    )
+        except StopIteration:
+            logger.info(
+                'reached the end of the result stream, parsing complete.'
+            )
+
+        self._report_query_state()
         return False
 
-    @connected
-    def close_connection(self):
+    @is_open
+    def getdesc(self):
+        return self.description
+
+    @is_open
+    def close(self):
+        self._is_open = False
+        if self._row_stream is not None:
+            self._row_stream.close()
+            self._row_stream = None
+            logger.debug('closed row data stream.')
+        else:
+            logger.debug('had no row data stream to close.')
+
+    @is_open
+    def execute(self, operation, parameters=()):
+        if self._row_stream:
+            logger.warning(
+                'will close the existing row data stream.'
+            )
+            self._row_stream.close()
+
+        self.rowcount = -1
+        self.rownumber = 0
+
+        matchObj = re.match(r'^SHOW FILES FROM\s(.+)',
+                            operation, re.IGNORECASE)
+        if matchObj:
+            self._default_storage_plugin = matchObj.group(1)
+            logger.debug(
+                'sets the default storage plugin to '
+                f'{self._default_storage_plugin}'
+            )
+
+        resp = self.connection.submit_query(
+            self.substitute_in_query(operation, parameters)
+        )
+
+        if resp.status_code != 200:
+            err_msg = resp.json().get('errorMessage', None)
+            raise ProgrammingError(err_msg, resp.status_code)
+
+        self._result_event_stream = parse(RequestsStreamWrapper(resp))
+        row_data_present = self._outer_parsing_loop()
+
+        # The leading, and possibly all, result metadata has now been parsed.
+        md = self.result_md
+        logger.info(f'received Drill query ID {md.get("queryId", None)}.')
+
+        if row_data_present:
+            # strip size information in column types e.g. in VARCHAR(10)
+            coltypes = list(
+                map(lambda m: re.sub(r'\(.*\)', '', m), md.pop('metadata'))
+            )
+            ncols = len(coltypes)
+
+            md['column_types'] = coltypes
+            self._typecasters = [TYPECASTERS.get(
+                m, lambda v: v) for m in coltypes]
+            self.description = tuple(
+                zip(
+                    md['columns'],  # name
+                    md['column_types'],  # type_code
+                    [None] * ncols,  # display_size
+                    [None] * ncols,  # internal_size
+                    [None] * ncols,  # precision
+                    [None] * ncols,  # scale
+                    [None] * ncols   # null_ok
+                )
+            )
+            logger.info(f'opened a row data stream of {ncols} columns.')
+
+    @is_open
+    def executemany(self, operation, seq_of_parameters):
+        for parameters in seq_of_parameters:
+            logger.debug(f'executes with parameters {parameters}.')
+            self.execute(operation, parameters)
+
+    @is_open
+    def fetchone(self):
+        res = self.fetchmany(1)
+        return next(iter(res), None)
+
+    @is_open
+    def fetchmany(self, size: int = None):
+        '''Fetch the next set of rows of a query result.
+
+        The number of rows to fetch per call is specified by the size
+        parameter. If it is not given, the cursor's arraysize determines the
+        number of rows to be fetched. If size is negative then all remaining
+        rows are fetched.
+        '''
+        if self._row_stream is None:
+            raise ProgrammingError(
+                'has no row data, have you executed a query that returns data?',
+                None
+            )
+
+        fetch_until = self.rownumber + (size or self.arraysize)
+        results = []
+
         try:
-            self._session.close()
-            self.close()
-        except Exception:
-            print('*************************')
-            print("Error in Connection.close_connection")
-            print('*************************')
-            print(Exception)
-            return False
-        return True
+            while self.rownumber != fetch_until:
+                row = self._typecast(tuple(next(self._row_stream).values()))
+                results.append(row)
+                self.rownumber += 1
+
+                if self.rownumber % api_globals._PROGRESS_LOG_N == 0:
+                    logger.info(f'streamed {self.rownumber} rows.')
+
+        except StopIteration:
+            self.rowcount = self.rownumber
+            logger.info(
+                f'reached the end of the row data after {self.rownumber}'
+                ' records.'
+            )
+            # restart the outer parsing loop to collect trailing metadata
+            self._outer_parsing_loop()
+
+        return results
+
+    @is_open
+    def fetchall(self) -> List:
+        '''Fetch all (remaining) rows of a query result.'''
+        return self.fetchmany(-1)
+
+    def setinputsizes(sizes):
+        '''Not supported.'''
+        logger.warn('setinputsizes is a no-op in this driver.')
+
+    def setoutputsize(size, column=0):
+        '''Not supported.'''
+        logger.warn('setoutputsize is a no-op in this driver.')
+
+    @is_open
+    def get_query_id(self) -> str:
+        """Unofficial convenience method for getting the Drill ID of the last query.
+        """
+        return self._query_id
+
+    @is_open
+    def get_column_names(self) -> List:
+        """Unofficial convenience method for getting the column names."""
+        return [d[0] for d in self.description]
+
+    @is_open
+    def get_query_metadata(self) -> List:
+        """Unofficial convenience method for getting the column metadata."""
+        return [d[1] for d in self.description]
+
+    def get_default_plugin(self) -> str:
+        """Unofficial convenience method for getting the default storage plugin.
+        """
+        return self._default_storage_plugin
+
+    # Make this Cursor object iterable
+
+    def __next__(self):
+        return self.fetchone()
+
+    def __iter__(self):
+        return self
+
+
+class Connection(object):
+    def __init__(self,
+                 host: str,
+                 db: str,
+                 port: int,
+                 proto: str,
+                 session: Session):
+        if session is None:
+            raise ProgrammingError('A Requests session is required.', None)
+
+        self.host = host
+        self.db = db
+        self.proto = proto
+        self.port = port
+        self._base_url = f'{proto}{host}:{port}'
+        self._session = session
+        self._connected = True
+
+    def submit_query(self, query):
+        payload = api_globals._PAYLOAD.copy()
+        # TODO: autoLimit, defaultSchema
+        payload['query'] = query
+
+        logger.debug('sends an HTTP POST with payload')
+        logger.debug(payload)
+
+        return self._session.post(
+            f'{self._base_url}/query.json',
+            data=dumps(payload),
+            headers=api_globals._HEADER,
+            timeout=None,
+            stream=True
+        )
+
+    # Decorator for methods which require connection
+    def connected(func):
+
+        def func_wrapper(self, *args, **kwargs):
+            if not self._connected:
+                raise ConnectionClosedException(
+                    f'Connection object is closed when calling {func}'
+                )
+
+            return func(self, *args, **kwargs)
+
+        return func_wrapper
+
+    def is_connected(self):
+        return self._connected
 
     @connected
     def close(self):
-        self._connected = False
+        try:
+            self._session.close()
+            self._connected = False
+        except Exception as ex:
+            logger.warn(f'encountered {ex} when try to close connection.')
+            raise ConnectionClosedException('Failed to close connection')
 
     @connected
     def commit(self):
-        if self._connected is False:
-            logging.error("AlreadyClosedException")
-        else:
-            logging.warning("Here goes some sort of commit")
+        logger.info('A commit is a no-op in this driver.')
 
     @connected
-    def cursor(self):
-        return Cursor(self.host, self.db, self.port, self.proto, self._session, self)
+    def cursor(self) -> Cursor:
+        return Cursor(
+            self
+        )
 
 
-def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=None, verify_ssl=False, ca_certs=None):
+def connect(host: str,
+            port: int = 8047,
+            db: str = None,
+            use_ssl: bool = False,
+            drilluser: str = None,
+            drillpass: str = None,
+            verify_ssl: bool = False,
+            ca_certs: bool = None,
+            ) -> Connection:
+
     session = Session()
 
     if verify_ssl is False:
@@ -384,56 +397,181 @@ def connect(host, port=8047, db=None, use_ssl=False, drilluser=None, drillpass=N
         else:
             session.verify = True
 
-    if use_ssl in [True, 'True', 'true']:
-        proto = "https://"
-    else:
-        proto = "http://"
+    proto = 'https://' if use_ssl in [True, 'True', 'true'] else 'http://'
+    base_url = f'{proto}{host}:{port}'
 
     if drilluser is None:
-        local_url = "/query.json"
-        local_payload = api_globals._PAYLOAD.copy()
-        local_payload["query"] = "show schemas"
+        payload = api_globals._PAYLOAD.copy()
+        payload['query'] = 'show schemas'
         response = session.post(
-            f"{proto}{host}:{port}{local_url}",
-            data=dumps(local_payload),
+            f'{base_url}/query.json',
+            data=dumps(payload),
             headers=api_globals._HEADER
         )
     else:
-        local_url = "/j_security_check"
-        local_payload = api_globals._LOGIN.copy()
-        local_payload["j_username"] = drilluser
-        local_payload["j_password"] = drillpass
+        payload = api_globals._LOGIN.copy()
+        payload['j_username'] = drilluser
+        payload['j_password'] = drillpass
         response = session.post(
-            f"{proto}{host}:{port}{local_url}",
-            data=local_payload
+            f'{base_url}/j_security_check',
+            data=payload
         )
 
     if response.status_code != 200:
-        logging.error("Error in connect")
+        logger.error('was unable to connect to Drill.')
         raise DatabaseError(
-            str(response.json()["errorMessage"]), response.status_code)
-    else:
-        raw_data = response.text
-        if raw_data.find("Invalid username/password credentials") >= 0:
-            logging.error("Error in connect: ", response.text)
-            raise AuthError(str(raw_data), response.status_code)
+            str(response.json().get('errorMessage', None)),
+            response.status_code
+        )
 
-        if db is not None:
-            local_payload = api_globals._PAYLOAD.copy()
-            local_url = "/query.json"
-            # local_payload["query"] = "USE {}".format(db)
-            local_payload["query"] = "SELECT 'test' FROM (VALUES(1))"
+    raw_data = response.text
+    if raw_data.find('Invalid username/password credentials') >= 0:
+        logger.error('failed to authenticate to Drill.')
+        raise AuthError(str(raw_data), response.status_code)
 
-            response = session.post(
-                f"{proto}{host}:{port}{local_url}",
-                data=dumps(local_payload),
-                headers=api_globals._HEADER
+    if db is not None:
+        payload = api_globals._PAYLOAD.copy()
+        payload['query'] = f'USE {db}'
+        # payload['query'] = "SELECT 'test' FROM (VALUES(1))"
+
+        response = session.post(
+            f'{base_url}/query.json',
+            data=dumps(payload),
+            headers=api_globals._HEADER
+        )
+
+        if response.status_code != 200:
+            logger.error(f'received an error when trying to USE {db}')
+            raise DatabaseError(
+                str(response.json().get('errorMessage', None)),
+                response.status_code
             )
 
-            if response.status_code != 200:
-                logging.error("Error in connect")
-                logging.error("Response code:", response.status_code)
-                raise DatabaseError(
-                    str(response.json()["errorMessage"]), response.status_code)
+    return Connection(host, db, port, proto, session)
 
-        return Connection(host, db, port, proto, session)
+
+class RequestsStreamWrapper(object):
+    """
+    A wrapper around a Requests response payload for converting
+    the returned generator into a file-like object.
+    """
+
+    def __init__(self, resp: Response):
+        self.data = chain.from_iterable(resp.iter_content())
+
+    def read(self, n):
+        return bytes(islice(self.data, None, n))
+
+
+def _items_once(event_stream, prefix):
+    '''
+    Generator dispatching native Python objects constructed from the ijson
+    events under the next occurrence of the given prefix.  It is very
+    similar to ijson.items except that it will not consume the entire JSON
+    stream looking for occurrences of prefix, but rather stop after
+    completing the *first* encountered occurrence of prefix.  The need for
+    this property is what precluded the use of ijson.items instead.
+    '''
+    current = None
+    while current != prefix:
+        current, event, value = next(event_stream)
+
+    logger.debug(f'found and will now parse an occurrence of {prefix}')
+    while current == prefix:
+        if event in ('start_map', 'start_array'):
+            object_depth = 1
+            builder = ObjectBuilder()
+            while object_depth:
+                builder.event(event, value)
+                current, event, value = next(event_stream)
+                if event in ('start_map', 'start_array'):
+                    object_depth += 1
+                elif event in ('end_map', 'end_array'):
+                    object_depth -= 1
+            del builder.containers[:]
+            yield builder.value
+        else:
+            yield value
+
+        current, event, value = next(event_stream)
+    logger.debug(f'finished parsing one occurrence of {prefix}')
+
+
+class DBAPITypeObject:
+    def __init__(self, *values):
+        self.values = values
+
+    def __cmp__(self, other):
+        if other in self.values:
+            return 0
+        if other < self.values:
+            return 1
+        else:
+            return -1
+
+
+TYPECASTERS = {
+    'DATE': lambda v: DateFromTicks(v/1000),
+    'TIME': lambda v: TimeFromTicks(v/1000),
+    'TIMESTAMP': lambda v: TimestampFromTicks(v/1000)
+}
+
+# Mandatory type objects defined by DB-API 2 specs.
+
+STRING = DBAPITypeObject('VARCHAR')
+BINARY = DBAPITypeObject('BINARY', 'VARBINARY')
+NUMBER = DBAPITypeObject('FLOAT4', 'FLOAT8', 'SMALLINT',
+                         'INT', 'BIGINT', 'DECIMAL')
+DATETIME = DBAPITypeObject('DATE', 'TIMESTAMP')
+ROWID = DBAPITypeObject()
+
+# Additional type objects (more specific):
+
+BOOL = DBAPITypeObject('BIT')
+SMALLINT = DBAPITypeObject('SMALLINT')
+INTEGER = DBAPITypeObject('INT')
+LONG = DBAPITypeObject('BIGINT')
+FLOAT = DBAPITypeObject('FLOAT4', 'FLOAT8')
+NUMERIC = DBAPITypeObject('VARDECIMAL')
+DATE = DBAPITypeObject('DATE')
+TIME = DBAPITypeObject('TIME')
+TIMESTAMP = DBAPITypeObject('TIMESTAMP')
+INTERVAL = DBAPITypeObject('INTERVALDAY', 'INTERVALYEAR')
+
+# Mandatory type helpers defined by DB-API 2 specs
+
+
+def Date(year, month, day):
+    """Construct an object holding a date value."""
+    return date(year, month, day)
+
+
+def Time(hour, minute=0, second=0, microsecond=0, tzinfo=None):
+    """Construct an object holding a time value."""
+    return time(hour, minute, second, microsecond, tzinfo)
+
+
+def Timestamp(year, month, day, hour=0, minute=0, second=0, microsecond=0,
+              tzinfo=None):
+    """Construct an object holding a time stamp value."""
+    return datetime(year, month, day, hour, minute, second, microsecond,
+                    tzinfo)
+
+
+def DateFromTicks(ticks):
+    """Construct an object holding a date value from the given ticks value."""
+    return Date(*gmtime(ticks)[:3])
+
+
+def TimeFromTicks(ticks):
+    """Construct an object holding a time value from the given ticks value."""
+    return Time(*gmtime(ticks)[3:6])
+
+
+def TimestampFromTicks(ticks):
+    """Construct an object holding a timestamp from the given ticks value."""
+    return Timestamp(*gmtime(ticks)[:6])
+
+
+class Binary(bytes):
+    """Construct an object capable of holding a binary (long) string value."""

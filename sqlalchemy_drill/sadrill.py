@@ -4,7 +4,7 @@
 # SQLAlchemy is a trademark of Michael Bayer.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this
-# software and associated documentation files (the "Software"), to deal in the Software
+# software and associated documentation files (the 'Software'), to deal in the Software
 # without restriction, including without limitation the rights to use, copy, modify, merge,
 # publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
 # to whom the Software is furnished to do so, subject to the following conditions:
@@ -12,7 +12,7 @@
 # The above copyright notice and this permission notice shall be included in all copies or
 # substantial portions of the Software.
 
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+# THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
 # PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
 # FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
@@ -26,6 +26,9 @@ from __future__ import unicode_literals
 from sqlalchemy import pool
 from sqlalchemy.engine import default
 from .base import DrillDialect, DrillIdentifierPreparer, DrillCompiler_sadrill
+import logging
+
+logger = logging.getLogger('sadrill')
 
 try:
     from sqlalchemy.sql.compiler import SQLCompiler
@@ -38,11 +41,12 @@ try:
 except ImportError:
     from sqlalchemy.databases.mysql import MSBigInteger as BigInteger
 
+
 class DrillDialect_sadrill(DrillDialect):
 
     name = 'drilldbapi'
     driver = 'rest'
-    dbapi = ""
+    dbapi = ''
     preparer = DrillIdentifierPreparer
     statement_compiler = DrillCompiler_sadrill
     poolclass = pool.SingletonThreadPool
@@ -71,7 +75,7 @@ class DrillDialect_sadrill(DrillDialect):
 
         try:
             db_parts = (url.database or 'drill').split('/')
-            db = ".".join(db_parts)
+            db = '.'.join(db_parts)
 
             # Save this for later use.
             self.host = url.host
@@ -91,11 +95,11 @@ class DrillDialect_sadrill(DrillDialect):
             qargs['db'] = db
             if url.username:
                 qargs['drilluser'] = url.username
-                qargs['drillpass'] = ""
+                qargs['drillpass'] = ''
                 if url.password:
                     qargs['drillpass'] = url.password
         except Exception as ex:
-            print("************************************")
-            print("Error in DrillDialect_sadrill.create_connect_args :: ", str(ex))
-            print("************************************")
+            logger.error('could not parse the provided connection url.')
+            raise(ex)
+
         return [], qargs
