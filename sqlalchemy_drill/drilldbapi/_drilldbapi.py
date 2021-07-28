@@ -55,7 +55,7 @@ class Cursor(object):
 
         self._is_open: bool = True
         self._result_event_stream = self._row_stream = None
-        self._typecasters: list = None
+        self._typecaster_list: list = None
 
     def is_open(func):
         '''Decorator for methods which require a connection'''
@@ -74,9 +74,19 @@ class Cursor(object):
 
         return func_wrapper
 
-    def _typecast(self, row) -> tuple:
-        '''Internal method to cast REST API values to Python types'''
-        return tuple((f(v) for f, v in zip(self._typecasters, row)))
+    def _gen_description(self, col_types):
+        blank = [None] * len(self.result_md['columns'])
+        self.description = tuple(
+            zip(
+                self.result_md['columns'],  # name
+                col_types or blank,  # type_code
+                blank,  # display_size
+                blank,  # internal_size
+                blank,  # precision
+                blank,  # scale
+                blank   # null_ok
+            )
+        )
 
     def _report_query_state(self):
         md = self.result_md
@@ -187,33 +197,36 @@ class Cursor(object):
 
         self._result_event_stream = parse(RequestsStreamWrapper(resp))
         row_data_present = self._outer_parsing_loop()
+        # The leading result metadata has now been parsed.
 
-        # The leading, and possibly all, result metadata has now been parsed.
-        md = self.result_md
-        logger.info(f'received Drill query ID {md.get("queryId", None)}.')
+        logger.info(
+            f'received Drill query ID {self.result_md.get("queryId", None)}.'
+        )
 
-        if row_data_present:
-            # strip size information in column types e.g. in VARCHAR(10)
-            coltypes = list(
-                map(lambda m: re.sub(r'\(.*\)', '', m), md.pop('metadata'))
+        if not row_data_present:
+            return
+
+        cols = self.result_md['columns']
+        # Column metadata could be trailing or entirely absent
+        if 'metadata' in self.result_md:
+            md = self.result_md['metadata']
+            # strip size information from column types e.g. VARCHAR(10)
+            basic_coltypes = [re.sub(r'\(.*\)', '', m) for m in md]
+            self._gen_description(basic_coltypes)
+
+            self._typecaster_list = [
+                self.connection.typecasters.get(col, lambda v: v) for
+                col in basic_coltypes
+            ]
+        else:
+            self._gen_description(None)
+            logger.warn(
+                'encountered data before metadata, typecasting during '
+                'streaming by this module will not take place.  Upgrade '
+                'to Drill >= 1.19 or apply your own typecasting.'
             )
-            ncols = len(coltypes)
 
-            md['column_types'] = coltypes
-            self._typecasters = [TYPECASTERS.get(
-                m, lambda v: v) for m in coltypes]
-            self.description = tuple(
-                zip(
-                    md['columns'],  # name
-                    md['column_types'],  # type_code
-                    [None] * ncols,  # display_size
-                    [None] * ncols,  # internal_size
-                    [None] * ncols,  # precision
-                    [None] * ncols,  # scale
-                    [None] * ncols   # null_ok
-                )
-            )
-            logger.info(f'opened a row data stream of {ncols} columns.')
+        logger.info(f'opened a row data stream of {len(cols)} columns.')
 
     @is_open
     def executemany(self, operation, seq_of_parameters):
@@ -246,8 +259,14 @@ class Cursor(object):
 
         try:
             while self.rownumber != fetch_until:
-                row = self._typecast(tuple(next(self._row_stream).values()))
-                results.append(row)
+                row_dict = next(self._row_stream)
+                # values ordered according to self.result_md['columns']
+                row = [row_dict[col] for col in self.result_md['columns']]
+
+                if self._typecaster_list is not None:
+                    row = (f(v) for f, v in zip(self._typecaster_list, row))
+
+                results.append(tuple(row))
                 self.rownumber += 1
 
                 if self.rownumber % api_globals._PROGRESS_LOG_N == 0:
@@ -310,22 +329,37 @@ class Cursor(object):
 class Connection(object):
     def __init__(self,
                  host: str,
-                 db: str,
                  port: int,
                  proto: str,
                  session: Session):
         if session is None:
             raise ProgrammingError('A Requests session is required.', None)
 
-        self.host = host
-        self.db = db
-        self.proto = proto
-        self.port = port
         self._base_url = f'{proto}{host}:{port}'
         self._session = session
         self._connected = True
 
-    def submit_query(self, query):
+        logger.debug('queries Drill\'s version number...')
+        resp = self.submit_query(
+            'select min(version) version from sys.drillbits'
+        )
+        self.drill_version = resp.json()['rows'][0]['version']
+        logger.info(f'has connected to Drill version {self.drill_version}.')
+
+        if self.drill_version < '1.19':
+            self.typecasters = {}
+        else:
+            # Starting in 1.19 the Drill REST API returns UNIX times
+            self.typecasters = {
+                'DATE': lambda v: DateFromTicks(v/1000),
+                'TIME': lambda v: TimeFromTicks(v/1000),
+                'TIMESTAMP': lambda v: TimestampFromTicks(v/1000)
+            }
+            logger.debug(
+                'sets up typecasting functions for Drill >= 1.19.'
+            )
+
+    def submit_query(self, query: str):
         payload = api_globals._PAYLOAD.copy()
         # TODO: autoLimit, defaultSchema
         payload['query'] = query
@@ -342,6 +376,7 @@ class Connection(object):
         )
 
     # Decorator for methods which require connection
+
     def connected(func):
 
         def func_wrapper(self, *args, **kwargs):
@@ -429,25 +464,11 @@ def connect(host: str,
         logger.error('failed to authenticate to Drill.')
         raise AuthError(str(raw_data), response.status_code)
 
+    conn = Connection(host, port, proto, session)
     if db is not None:
-        payload = api_globals._PAYLOAD.copy()
-        payload['query'] = f'USE {db}'
-        # payload['query'] = "SELECT 'test' FROM (VALUES(1))"
+        conn.submit_query(f'USE {db}')
 
-        response = session.post(
-            f'{base_url}/query.json',
-            data=dumps(payload),
-            headers=api_globals._HEADER
-        )
-
-        if response.status_code != 200:
-            logger.error(f'received an error when trying to USE {db}')
-            raise DatabaseError(
-                str(response.json().get('errorMessage', None)),
-                response.status_code
-            )
-
-    return Connection(host, db, port, proto, session)
+    return conn
 
 
 class RequestsStreamWrapper(object):
@@ -509,12 +530,6 @@ class DBAPITypeObject:
         else:
             return -1
 
-
-TYPECASTERS = {
-    'DATE': lambda v: DateFromTicks(v/1000),
-    'TIME': lambda v: TimeFromTicks(v/1000),
-    'TIMESTAMP': lambda v: TimestampFromTicks(v/1000)
-}
 
 # Mandatory type objects defined by DB-API 2 specs.
 
