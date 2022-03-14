@@ -331,6 +331,7 @@ class Connection(object):
                  host: str,
                  port: int,
                  proto: str,
+                 impersonation_target: str,
                  session: Session):
         if session is None:
             raise ProgrammingError('A Requests session is required.', None)
@@ -338,6 +339,7 @@ class Connection(object):
         self._base_url = f'{proto}{host}:{port}'
         self._session = session
         self._connected = True
+        self._impersonation_target = impersonation_target
 
         logger.debug('queries Drill\'s version number...')
         resp = self.submit_query(
@@ -361,13 +363,15 @@ class Connection(object):
 
     def submit_query(self, query: str):
         payload = api_globals._PAYLOAD.copy()
+        payload['userName'] = self._impersonation_target
+
         # TODO: autoLimit, defaultSchema
         payload['query'] = query
 
         logger.debug('sends an HTTP POST with payload')
         logger.debug(payload)
 
-        return self._session.post(
+        resp = self._session.post(
             f'{self._base_url}/query.json',
             data=dumps(payload),
             headers=api_globals._HEADER,
@@ -375,8 +379,15 @@ class Connection(object):
             stream=True
         )
 
-    # Decorator for methods which require connection
+        if resp.status_code == 200:
+            return resp
+        else:
+            raise DatabaseError(
+                resp.json().get('errorMessage', None),
+                resp.status_code
+            )
 
+    # Decorator for methods which require connection
     def connected(func):
 
         def func_wrapper(self, *args, **kwargs):
@@ -419,24 +430,24 @@ def connect(host: str,
             drilluser: str = None,
             drillpass: str = None,
             verify_ssl: bool = False,
-            ca_certs: bool = None,
+            impersonation_target: str = None
             ) -> Connection:
 
     session = Session()
 
-    if verify_ssl is False:
-        session.verify = False
-    else:
-        if ca_certs is not None:
-            session.verify = ca_certs
-        else:
-            session.verify = True
-
+    session.verify = verify_ssl
     proto = 'https://' if use_ssl in [True, 'True', 'true'] else 'http://'
     base_url = f'{proto}{host}:{port}'
 
+    logging.info(
+        f'will log in with user {drilluser} and impersonation target '
+        f'{impersonation_target}'
+    )
+
     if drilluser is None:
         payload = api_globals._PAYLOAD.copy()
+        payload['userName'] = impersonation_target
+
         payload['query'] = 'show schemas'
         response = session.post(
             f'{base_url}/query.json',
@@ -464,7 +475,7 @@ def connect(host: str,
         logger.error('failed to authenticate to Drill.')
         raise AuthError(str(raw_data), response.status_code)
 
-    conn = Connection(host, port, proto, session)
+    conn = Connection(host, port, proto, impersonation_target, session)
     if db is not None:
         conn.submit_query(f'USE {db}')
 
