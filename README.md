@@ -22,9 +22,9 @@ Alternatively, you can download the latest release from github and install from 
 python3 -m pip install git+https://github.com/JohnOmernik/sqlalchemy-drill.git
 ```
 
-## Usage
+## Usage with REST
 
-To use Drill with SQLAlchemy you will need to craft a connection string in the format below:
+Drill's REST API can execute queries with results streamed to JSON returned over chunked HTTP for Drill >= 1.19, otherwise with results buffered and then returned in a conventional HTTP response.  A SQLAlchemy URL to connect to Drill over REST looks like the following.
 
 ```
 drill+sadrill://<username>:<password>@<host>:<port>/<storage_plugin>?use_ssl=True
@@ -36,7 +36,20 @@ To connect to Drill running on a local machine running in embedded mode you can 
 drill+sadrill://localhost:8047/dfs?use_ssl=False
 ```
 
+### Supported URL query parameters
+
+| Parameter                 | Type    | Description                                                    |
+| ------------------------- | ------- | -------------------------------------------------------------- |
+| use_ssl                   | boolean | Whether to connect to Drill using HTTPS                        |
+| verify_ssl                | boolean | Whether to verify the server's TLS certificate                 |
+| impersonation_target\[1\] | string  | Username of a Drill user to be impersonated by this connection |
+
+[1] Requires a build of Drill that incorporates the fix for DRILL-8168.
+
+### Trailing metadata
+
 Query result metadata returned by the Drill REST API is stored in the `result_md` field of the DB-API Cursor object.  Note that any trailing metadata, i.e. metadata which comes after result row data, will only be populated after you have iterated through all of the returned rows.  If you need this trailing metadata you can make the cursor object reachable after it has been completely iterated by obtaining a reference to it beforehand, as follows.
+
 ```python
 r = engine.execute('select current_timestamp')
 r.cursor.result_md  # access metadata, but only leading metadata
@@ -46,11 +59,13 @@ cur.result_md       # access metadata, including trailing metadata
 del cur             # optionally delete the reference when done
 ```
 
-### Changes in Drill 1.19 affecting drill+sadrill
+### Drill < 1.19
 
 In versions of Drill earlier than 1.19, all data values are serialised to JSON strings and column type metadata comes after the data itself.  As a result, for these versions of Drill, the drill+sadrill dialect returns every data value as a string.  To convert non-string data to its native type you need to typecast it yourself.
 
-In Drill 1.19 the REST API began making use of numeric types in JSON for numbers and times, the latter via a UNIX time representation.  As a result, the drill+sadrill dialect is able to return appropriate types for numbers and times when used with Drill >= 1.19.
+### Drill >= 1.19
+
+In Drill 1.19 the REST API began making use of numeric types in JSON for numbers and times, the latter via a UNIX time representation while column type metadata was moved ahead of the result data.  Because of this, the drill+sadrill dialect is able to return appropriate types for numbers and times when used with Drill >= 1.19.
 
 ## Usage with JDBC
 
