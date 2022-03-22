@@ -139,7 +139,7 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
             'nchar', 'nclob', 'new', 'no', 'none', 'normalize', 'not', 'null', 'nullif', 'numeric', 'octet_length',
             'of', 'offset', 'old', 'on', 'only', 'open', 'or', 'order', 'out', 'outer', 'over', 'overlaps', 'overlay',
             'parameter', 'partition', 'percentile_cont', 'percentile_disc', 'percent_rank', 'position', 'power',
-            'precision', 'prepare', 'primary', 'procedure', 'properties' 'range', 'rank', 'reads', 'real', 'recursive', 
+            'precision', 'prepare', 'primary', 'procedure', 'properties', 'range', 'rank', 'reads', 'real', 'recursive', 
             'ref', 'references', 'referencing', 'regr_avgx', 'regr_avgy', 'regr_count', 'regr_intercept', 'regr_r2',
             'regr_slope', 'regr_sxx', 'regr_sxy', 'release', 'replace', 'result', 'return', 'returns', 'revoke',
             'right', 'rollback', 'rollup', 'row', 'rows', 'row_number', 'savepoint', 'schemas', 'scope', 'scroll',
