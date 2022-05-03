@@ -353,9 +353,9 @@ class Connection(object):
         else:
             # Starting in 1.19 the Drill REST API returns UNIX times
             self.typecasters = {
-                'DATE': lambda v: DateFromTicks(v/1000),
-                'TIME': lambda v: TimeFromTicks(v/1000),
-                'TIMESTAMP': lambda v: TimestampFromTicks(v/1000)
+                'DATE': lambda v: DateFromTicks(v),
+                'TIME': lambda v: TimeFromTicks(v),
+                'TIMESTAMP': lambda v: TimestampFromTicks(v)
             }
             logger.debug(
                 'sets up typecasting functions for Drill >= 1.19.'
@@ -585,18 +585,18 @@ def Timestamp(year, month, day, hour=0, minute=0, second=0, microsecond=0,
 
 
 def DateFromTicks(ticks):
-    """Construct an object holding a date value from the given ticks value."""
-    return Date(*gmtime(ticks)[:3])
+    """Construct an object holding a date value from the given Unix time ms."""
+    return Date(*gmtime(ticks/1000)[:3]) if ticks else None
 
 
 def TimeFromTicks(ticks):
-    """Construct an object holding a time value from the given ticks value."""
-    return Time(*gmtime(ticks)[3:6])
+    """Construct an object holding a time value from the given Unix time ms."""
+    return Time(*gmtime(ticks/1000)[3:6]) if ticks else None
 
 
 def TimestampFromTicks(ticks):
-    """Construct an object holding a timestamp from the given ticks value."""
-    return Timestamp(*gmtime(ticks)[:6])
+    """Construct an object holding a timestamp from the given Unix time ms."""
+    return Timestamp(*gmtime(ticks/1000)[:6]) if ticks else None
 
 
 class Binary(bytes):
