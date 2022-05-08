@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+## [1.1.3] - 2022-05-03
+
+### Changed
+
+- Fixed type casting bug which caused queries that returned null date or time
+  values to raise an error in _drilldbapi.py.
+
 ## [1.1.2] - 2022-03-14
 
 ### Changed
