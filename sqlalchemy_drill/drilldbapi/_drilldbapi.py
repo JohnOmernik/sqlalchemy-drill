@@ -91,23 +91,28 @@ class Cursor(object):
     def _report_query_state(self):
         md = self.result_md
         query_state = md.get('queryState', None)
+        exception = md.get(
+                    'exception',
+                    'No exception returned.'
+                )
+        error_message = md.get(
+            'errorMessage',
+            'No error message is returned (which most likely means that ' \
+            'drill.exec.http.rest.errors.verbose is set to false.)'
+        )
+        stack_trace = md.get('stackTrace', 'No stack trace returned.')
+
         logger.info(
             f'received final query state {query_state}.'
         )
 
         if query_state != 'COMPLETED':
-            logger.warning(
-                md.get(
-                    'exception',
-                    'No exception returned, c.f. drill.exec.http.rest.errors.verbose.'
-                )
-            )
-            logger.warning(
-                md.get('errorMessage', 'No error message returned.'))
-            logger.warning(md.get('stackTrace', 'No stack trace returned.'))
+            logger.warning(exception)
+            logger.warning(error_message)
+            logger.warning(stack_trace)
 
             raise DatabaseError(
-                f'Final Drill query state is {query_state}',
+                f'Final Drill query state is {query_state}. {error_message}',
                 None
             )
 
