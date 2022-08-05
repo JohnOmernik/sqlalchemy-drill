@@ -482,6 +482,9 @@ def connect(host: str,
 
     conn = Connection(host, port, proto, impersonation_target, session)
     if db is not None:
+        _db = db
+        db = '.'.join((f'`{db_part}`' for db_part in db.split('.')))
+        print(f'DRILLDBAPI - CUSTOM: CHANGED "{_db}" to "{db}"')
         conn.submit_query(f'USE {db}')
 
     return conn
