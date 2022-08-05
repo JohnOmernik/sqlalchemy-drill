@@ -277,6 +277,8 @@ class DrillDialect(default.DefaultDialect):
         result = []
         try:
             for row in curs:
+                if row.SCHEMA_NAME == "information_schema":
+                    print("DRILLDBAPI - CUSTOM: row.SCHEMA_NAME is in lowercase!!! ", row.SCHEMA_NAME)
                 if row.SCHEMA_NAME != "cp.default" and row.SCHEMA_NAME != "INFORMATION_SCHEMA" and row.SCHEMA_NAME != "dfs.default":
                     result.append(row.SCHEMA_NAME)
         except Exception as ex:
@@ -346,6 +348,7 @@ class DrillDialect(default.DefaultDialect):
         curs = connection.execute(
             "SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.views WHERE table_schema='" + schema + "'")
         try:
+            print(f'DRILLDBAPI - CUSTOM: {curs=}, {len(curs)}')
             for row in curs:
                 myname = row.TABLE_NAME
                 view_names.append(myname)
