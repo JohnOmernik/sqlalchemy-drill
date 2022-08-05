@@ -391,7 +391,7 @@ class DrillDialect(default.DefaultDialect):
         result = []
 
         plugin_type = self.get_plugin_type(connection, schema)
-
+        print("DRILLDBAPI - CUSTOM: base::DrillDialect::get_columns: plugin_type: ", plugin_type)
         # Since MongoDB uses the ** notation, bypass that and query the data directly.
         if plugin_type == "file" or plugin_type == "mongo":
             views = self.get_view_names(connection, schema)
