@@ -392,7 +392,6 @@ class DrillDialect(default.DefaultDialect):
         print("DRILLDBAPI - CUSTOM: base::DrillDialect::get_columns: plugin_type: ", plugin_type)
         # Since MongoDB uses the ** notation, bypass that and query the data directly.
         if plugin_type == "file" or plugin_type == "mongo":
-            views = self.get_view_names(connection, schema)
 
             file_name = schema + "." + table_name
             quoted_file_name = self.identifier_preparer.format_drill_table(
@@ -405,7 +404,7 @@ class DrillDialect(default.DefaultDialect):
                     file_name, isFile=False)
                 q = "SELECT `**` FROM {table_name} LIMIT 1".format(
                     table_name=mongo_quoted_file_name)
-            elif table_name in views:
+            elif table_name in self.get_view_names(connection, schema):
                 logging.debug("View: ", quoted_file_name, table_name, schema)
                 view_name = "`{schema}`.`{table_name}`".format(
                     schema=schema, table_name=table_name)
