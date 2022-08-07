@@ -375,6 +375,14 @@ class Connection(object):
         # TODO: autoLimit, defaultSchema
         payload['query'] = query
 
+        resp = self._session.post(
+            f'{self._base_url}/query.json',
+            data=dumps(payload),
+            headers=api_globals._HEADER,
+            timeout=None,
+            stream=True
+        )
+
         logger.debug('sends an HTTP POST with payload')
         logger.debug(payload)
 
@@ -385,14 +393,6 @@ class Connection(object):
             pprint({_k: _v.__repr__()})
         print("headers:")
         pprint({_k: _v.__repr__() for _k, _v in api_globals._HEADER})
-
-        resp = self._session.post(
-            f'{self._base_url}/query.json',
-            data=dumps(payload),
-            headers=api_globals._HEADER,
-            timeout=None,
-            stream=True
-        )
 
         if resp.status_code == 200:
             return resp
