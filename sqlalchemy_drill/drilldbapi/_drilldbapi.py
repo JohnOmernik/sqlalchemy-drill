@@ -379,7 +379,8 @@ class Connection(object):
         logger.debug(payload)
 
         print("DRILLDBAPI - CUSTOM:")
-        print("query:")
+        print("payload: ", payload)
+        print("payload - detail:")
         pprint({_k: _v.__repr__() for _k, _v in payload})
         print("headers:")
         pprint({_k: _v.__repr__() for _k, _v in api_globals._HEADER})
