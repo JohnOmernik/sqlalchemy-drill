@@ -19,7 +19,7 @@ threadsafety = 3
 paramstyle = 'qmark'
 default_storage_plugin = ''
 
-logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.ERROR)
+logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.DEBUG)
 logger = logging.getLogger('drilldbapi')
 
 # Python DB API 2.0 classes

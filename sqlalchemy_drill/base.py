@@ -33,7 +33,7 @@ try:
 except ImportError:
     from sqlalchemy.sql.compiler import DefaultCompiler as SQLCompiler
 
-logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.ERROR)
+logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.DEBUG)
 
 _type_map = {
     'bit': types.BOOLEAN,

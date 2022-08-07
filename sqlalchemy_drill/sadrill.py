@@ -28,7 +28,7 @@ from sqlalchemy.engine import default
 from .base import DrillDialect, DrillIdentifierPreparer, DrillCompiler_sadrill
 import logging
 
-logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.ERROR)
+logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.DEBUG)
 logger = logging.getLogger('sadrill')
 
 try:
