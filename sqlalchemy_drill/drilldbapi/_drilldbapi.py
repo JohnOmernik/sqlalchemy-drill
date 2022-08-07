@@ -381,7 +381,8 @@ class Connection(object):
         print("DRILLDBAPI - CUSTOM:")
         print("payload: ", payload)
         print("payload - detail:")
-        pprint({_k: _v.__repr__() for _k, _v in payload})
+        for _k, _v in payload:
+            pprint({_k: _v.__repr__()})
         print("headers:")
         pprint({_k: _v.__repr__() for _k, _v in api_globals._HEADER})
 
