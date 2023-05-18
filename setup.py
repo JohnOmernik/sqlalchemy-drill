@@ -64,7 +64,7 @@ setup(name='sqlalchemy_drill',
       license='MIT',
       url='https://github.com/JohnOmernik/sqlalchemy-drill',
       download_url='https://github.com/JohnOmernik/sqlalchemy-drill/archive/'
-      '1.1.3.tar.gz',
+      '1.1.4.tar.gz',
       packages=find_packages(),
       include_package_data=True,
       tests_require=['nose >= 0.11'],
