@@ -110,11 +110,16 @@ class Cursor(object):
             logger.warning(exception)
             logger.warning(error_message)
             logger.warning(stack_trace)
+            logger.info(query_state)
+            logger.error(error_message)
 
+            '''
             raise DatabaseError(
                 f'Final Drill query state is {query_state}. {error_message}',
                 None
             )
+            '''
+            return
 
     def _outer_parsing_loop(self) -> bool:
         '''Internal method to process the outermost query result JSON structure.
@@ -277,7 +282,7 @@ class Cursor(object):
                 if self.rownumber % api_globals._PROGRESS_LOG_N == 0:
                     logger.info(f'streamed {self.rownumber} rows.')
 
-        except StopIteration:
+        except:
             self.rowcount = self.rownumber
             logger.info(
                 f'reached the end of the row data after {self.rownumber}'
