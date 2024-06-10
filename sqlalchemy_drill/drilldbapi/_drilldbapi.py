@@ -110,16 +110,11 @@ class Cursor(object):
             logger.warning(exception)
             logger.warning(error_message)
             logger.warning(stack_trace)
-            logger.info(query_state)
-            logger.error(error_message)
 
-            '''
             raise DatabaseError(
                 f'Final Drill query state is {query_state}. {error_message}',
                 None
             )
-            '''
-            return
 
     def _outer_parsing_loop(self) -> bool:
         '''Internal method to process the outermost query result JSON structure.
@@ -282,7 +277,7 @@ class Cursor(object):
                 if self.rownumber % api_globals._PROGRESS_LOG_N == 0:
                     logger.info(f'streamed {self.rownumber} rows.')
 
-        except:
+        except StopIteration:
             self.rowcount = self.rownumber
             logger.info(
                 f'reached the end of the row data after {self.rownumber}'
@@ -516,7 +511,10 @@ def _items_once(event_stream, prefix):
     '''
     current = None
     while current != prefix:
-        current, event, value = next(event_stream)
+        try:
+            current, event, value = next(event_stream)
+        except StopIteration:
+            return  # see PEP-479
 
     logger.debug(f'found and will now parse an occurrence of {prefix}')
     while current == prefix:
@@ -524,12 +522,15 @@ def _items_once(event_stream, prefix):
             object_depth = 1
             builder = ObjectBuilder()
             while object_depth:
-                builder.event(event, value)
-                current, event, value = next(event_stream)
-                if event in ('start_map', 'start_array'):
-                    object_depth += 1
-                elif event in ('end_map', 'end_array'):
-                    object_depth -= 1
+                try:
+                    builder.event(event, value)
+                    current, event, value = next(event_stream)
+                    if event in ('start_map', 'start_array'):
+                        object_depth += 1
+                    elif event in ('end_map', 'end_array'):
+                        object_depth -= 1
+                except StopIteration:
+                    return  # see PEP-479
             del builder.containers[:]
             yield builder.value
         else:

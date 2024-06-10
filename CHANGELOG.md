@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+## [1.1.5] - 2024-06-04
+
+### Fixed
+
+- Fix a leaked StopIteration from a generator.
+
+## [1.1.4] - 2023-10-23
+
+### Fixed
+
+- Add 'properties' as a reserved word.
+
 ## [1.1.3] - 2022-05-03
 
 ### Changed
