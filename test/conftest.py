@@ -19,10 +19,43 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+from pathlib import Path
+
+import pytest
+import requests
 from sqlalchemy.dialects import registry
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.waiting_utils import wait_container_is_ready
 
 registry.register("drill", "sqlalchemy_drill.pyodbc", "DrillDialect_pyodbc")
 registry.register("drill.pyodbc", "sqlalchemy_drill.pyodbc", "DrillDialect_pyodbc")
 registry.register("drill.pydrill", "sqlalchemy_drill.pydrill", "DrillDialect_pydrill")
 
-from sqlalchemy.testing.plugin.pytestplugin import *
+
+@wait_container_is_ready(requests.exceptions.ConnectionError)
+def wait_for_http_up(drill_container):
+    drill_ip, drill_http_port = (
+        drill_container.get_container_host_ip(),
+        drill_container.get_exposed_port(8047),
+    )
+    status_code = requests.get(f"http://{drill_ip}:{drill_http_port}").status_code
+    print(f"Received HTTP {status_code}")
+    return requests.get(f"http://{drill_ip}:{drill_http_port}").status_code == 200
+
+
+@pytest.fixture(scope="session")
+def drill_container():
+    test_dir = Path("test/").absolute()
+    try:
+        drill_container = DockerContainer("apache/drill:latest")
+        drill_container.with_exposed_ports(8047)\
+            .with_volume_mapping(test_dir/"drill-override.conf", "/opt/drill/conf/drill-override.conf")\
+            .with_volume_mapping(test_dir/"htpasswd", "/opt/drill/conf/htpasswd")\
+            .with_kwargs(entrypoint="/bin/bash")\
+            .with_command(["-c", "$DRILL_HOME/bin/drill-embedded -n dbapi -p foo -f <(sleep infinity)"])\
+            .start()
+
+        wait_for_http_up(drill_container)
+        yield drill_container
+    finally:
+        drill_container.stop()
