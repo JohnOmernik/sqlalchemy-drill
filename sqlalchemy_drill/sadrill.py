@@ -46,7 +46,6 @@ class DrillDialect_sadrill(DrillDialect):
 
     name = 'drilldbapi'
     driver = 'rest'
-    dbapi = ''
     preparer = DrillIdentifierPreparer
     statement_compiler = DrillCompiler_sadrill
     poolclass = pool.SingletonThreadPool
@@ -65,9 +64,14 @@ class DrillDialect_sadrill(DrillDialect):
         self.supported_extensions = []
 
     @classmethod
-    def dbapi(cls):
+    def import_dbapi(cls):
         import sqlalchemy_drill.drilldbapi as module
         return module
+
+    @classmethod
+    def dbapi(cls):
+        """Deprecated in SQLAlchemy, retained for backwards compatibility."""
+        DrillCompiler_sadrill.import_dbapi()
 
     def create_connect_args(self, url, **kwargs):
         url_port = url.port or 8047
