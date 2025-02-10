@@ -228,7 +228,7 @@ class Cursor(object):
             ]
         else:
             self._gen_description(None)
-            logger.warn(
+            logger.warning(
                 'encountered data before metadata, typecasting during '
                 'streaming by this module will not take place.  Upgrade '
                 'to Drill >= 1.19 or apply your own typecasting.'
@@ -298,11 +298,11 @@ class Cursor(object):
 
     def setinputsizes(sizes):
         '''Not supported.'''
-        logger.warn('setinputsizes is a no-op in this driver.')
+        logger.warning('setinputsizes is a no-op in this driver.')
 
     def setoutputsize(size, column=0):
         '''Not supported.'''
-        logger.warn('setoutputsize is a no-op in this driver.')
+        logger.warning('setoutputsize is a no-op in this driver.')
 
     @is_open
     def get_query_id(self) -> str:
@@ -420,7 +420,7 @@ class Connection(object):
             self._session.close()
             self._connected = False
         except Exception as ex:
-            logger.warn(f'encountered {ex} when try to close connection.')
+            logger.warning(f'encountered {ex} when try to close connection.')
             raise ConnectionClosedException('Failed to close connection')
 
     @connected
