@@ -139,6 +139,9 @@ class Cursor(object):
                     continue
 
                 if value == 'rows':
+                    # discard the array node itself
+                    next(self._result_event_stream)
+
                     self._row_stream = _items_once(
                         self._result_event_stream, 'rows.item'
                     )
@@ -384,6 +387,9 @@ class Connection(object):
             stream=True
         )
 
+        logger.debug('received an HTTP response with body:')
+        logger.debug(resp.text)
+
         if resp.status_code == 200:
             return resp
         else:
@@ -502,21 +508,18 @@ class RequestsStreamWrapper(object):
 
 def _items_once(event_stream, prefix):
     '''
-    Generator dispatching native Python objects constructed from the ijson
-    events under the next occurrence of the given prefix.  It is very
-    similar to ijson.items except that it will not consume the entire JSON
-    stream looking for occurrences of prefix, but rather stop after
-    completing the *first* encountered occurrence of prefix.  The need for
-    this property is what precluded the use of ijson.items instead.
+    Generator dispatching native Python objects constructed from the ijson events under the next
+    occurrence of the given prefix.  It is similar similar to ijson.items except that it will
+    not consume the entire JSON stream looking for occurrences of prefix, but rather stop after
+    completing the current occurrence of prefix.  The need for this behaviour is what precluded
+    the use of ijson.items instead.
     '''
-    current = None
-    while current != prefix:
-        try:
-            current, event, value = next(event_stream)
-        except StopIteration:
-            return  # see PEP-479
 
-    logger.debug(f'found and will now parse an occurrence of {prefix}')
+    try:
+        current, event, value = next(event_stream)
+    except StopIteration:
+        return  # see PEP-479
+
     while current == prefix:
         if event in ('start_map', 'start_array'):
             object_depth = 1
@@ -536,7 +539,11 @@ def _items_once(event_stream, prefix):
         else:
             yield value
 
-        current, event, value = next(event_stream)
+        try:
+            current, event, value = next(event_stream)
+        except StopIteration:
+            return  # see PEP-479
+
     logger.debug(f'finished parsing one occurrence of {prefix}')
 
 
