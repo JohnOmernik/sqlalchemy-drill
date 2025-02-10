@@ -21,12 +21,20 @@
 
 from sqlalchemy import create_engine
 
-engine = create_engine('drill+sadrill://localhost:8047/dfs?use_ssl=False')
+# It is usually not a good idea to bury starting the JVM in a library.  Doing so would
+# make it so that JPype can only be used in the module and not available for other things.
+# You would also have to handle cases were the JVM is already started or the JVM was started
+# with a different thread than main.
+import jpype
+#jpype.startJVM("-ea")
+jpype.startJVM("-ea", classpath="lib/*")
 
-with engine.connect() as con:
-    rs = con.execute('SELECT * FROM cp.`employee.json` LIMIT 5')
-    for row in rs:
-        print(row)
+#engine = create_engine('drill+sadrill://localhost:8047/dfs?use_ssl=False')
+#
+#with engine.connect() as con:
+#    rs = con.execute('SELECT * FROM cp.`employee.json` LIMIT 5')
+#    for row in rs:
+#        print(row)
 
 print("Now JDBC")
 jdbc_engine = create_engine('drill+jdbc://admin:password@localhost:31010')
