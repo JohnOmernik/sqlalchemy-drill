@@ -19,10 +19,11 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import dbapi20
 import pytest
 
 from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+from . import dbapi20
 
 
 @pytest.fixture(scope="class")
@@ -35,6 +36,8 @@ def drill_container_cls(request, drill_container):
         "host": drill_container.get_container_host_ip(),
         "port": drill_container.get_exposed_port(8047),
         "db": "dfs.tmp",
+        "drilluser": "dbapi",
+        "drillpass": "foo"
     }
 
 
@@ -42,7 +45,6 @@ def drill_container_cls(request, drill_container):
 class DrillTest(dbapi20.DatabaseAPI20Test):
 
     driver = _drilldbapi
-    # lower_func = "lower"  # For stored procedure test
 
     def setUp(self):
         dbapi20.DatabaseAPI20Test.setUp(self)
@@ -50,11 +52,89 @@ class DrillTest(dbapi20.DatabaseAPI20Test):
     def tearDown(self):
         dbapi20.DatabaseAPI20Test.tearDown(self)
 
-    def test_non_idempotent_close(self):
+    @pytest.mark.skip("No implemented")
+    def test_ExceptionsAsConnectionAttributes(self):
         pass
 
+    def test_description(self):
+        """
+        Overrides the base test to reflect that Drill does return row data for CREATE statements
+        (each row reporting the number of records written by a writer fragment).
+        """
+        try:
+            con = self._connect()
+            cur = con.cursor()
+            cur.execute(self.ddl1)
+            self.assertEqual(
+                len(cur.description),
+                2,
+                "cursor.description should describe two columns",
+            )
+            cur.execute("select name from %sbooze" % self.table_prefix)
+            self.assertEqual(
+                len(cur.description), 1, "cursor.description describes too many columns"
+            )
+            self.assertEqual(
+                len(cur.description[0]),
+                7,
+                "cursor.description[x] tuples must have 7 elements",
+            )
+            self.assertEqual(
+                cur.description[0][0].lower(),
+                "name",
+                "cursor.description[x][0] must return column name",
+            )
+            self.assertEqual(
+                cur.description[0][1],
+                self.driver.STRING,
+                "cursor.description[x][1] must return column type. Got %r"
+                % cur.description[0][1],
+            )
+        finally:
+            con.close()
+
+    def test_execute(self):
+        """
+        Overrides the base test with a simplified test of parameterised query execution.
+        """
+        con = self._connect()
+        try:
+            cur = con.cursor()
+            cur.execute("select ? * ? as product", (3, 3))
+            res = cur.fetchall()
+            self.assertEqual([(9,)], res)
+        finally:
+            con.close()
+
+    def test_executemany(self):
+        """
+        Overrides the base test with a simplified test of multiple parameterised query executions.
+        """
+        con = self._connect()
+        try:
+            cur = con.cursor()
+            cur.executemany(
+                f"create table `{self.table_prefix}_executemany/?_squared` as select ? * ? as product",
+                [(i, i, i) for i in range(1, 4)],
+            )
+
+            cur.execute(
+                f"select product from {self.table_prefix}_executemany order by product"
+            )
+            res = cur.fetchall()
+            self.assertEqual([(1,), (4,), (9,)], res)
+        finally:
+            cur.execute(f"drop table if exists {self.table_prefix}_executemany")
+            con.close()
+
+    @pytest.mark.skip("Not implemented")
+    def test_callproc(self):
+        pass
+
+    @pytest.mark.skip("Not implemented")
     def test_nextset(self):
         pass
 
+    @pytest.mark.skip("Not implemented")
     def test_setoutputsize(self):
         pass
