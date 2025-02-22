@@ -10,8 +10,9 @@ from itertools import chain, islice
 from datetime import date, time, datetime
 from time import gmtime
 from . import api_globals
-from .api_exceptions import AuthError, DatabaseError, ProgrammingError, \
-    CursorClosedException, ConnectionClosedException
+from .api_exceptions import (AuthError, ConnectionClosedException, CursorClosedException,
+                             DatabaseError, Error, IntegrityError, InterfaceError, InternalError,
+                             NotSupportedError, OperationalError, ProgrammingError, Warning)
 
 apilevel = '2.0'
 threadsafety = 3
@@ -19,6 +20,7 @@ paramstyle = 'qmark'
 default_storage_plugin = ''
 
 logger = logging.getLogger('drilldbapi')
+logger.setLevel(logging.DEBUG)
 
 # Python DB API 2.0 classes
 
