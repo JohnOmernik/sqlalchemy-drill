@@ -300,11 +300,11 @@ class Cursor(object):
 
     def setinputsizes(self, *sizes):
         '''Not supported.'''
-        logger.warning('setinputsizes is a no-op in this driver.')
+        logger.debug('setinputsizes is a no-op in this driver.')
 
     def setoutputsize(self, size, column=0):
         '''Not supported.'''
-        logger.warning('setoutputsize is a no-op in this driver.')
+        logger.debug('setoutputsize is a no-op in this driver.')
 
     @is_open
     def get_query_id(self) -> str:
@@ -427,7 +427,7 @@ class Connection(object):
 
     @connected
     def commit(self):
-        logger.info('A commit is a no-op in this driver.')
+        logger.debug('commit is a no-op in this driver.')
 
     @connected
     def cursor(self) -> Cursor:
