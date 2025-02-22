@@ -298,11 +298,11 @@ class Cursor(object):
         '''Fetch all (remaining) rows of a query result.'''
         return self.fetchmany(-1)
 
-    def setinputsizes(sizes):
+    def setinputsizes(self, *sizes):
         '''Not supported.'''
         logger.warning('setinputsizes is a no-op in this driver.')
 
-    def setoutputsize(size, column=0):
+    def setoutputsize(self, size, column=0):
         '''Not supported.'''
         logger.warning('setoutputsize is a no-op in this driver.')
 
