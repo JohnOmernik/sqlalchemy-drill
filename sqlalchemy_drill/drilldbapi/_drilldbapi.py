@@ -32,10 +32,12 @@ class Cursor(object):
         query = string_query
         try:
             for param in parameters:
-                if type(param) == str:
+                if isinstance(param, str):
                     param = f"'{param}'"
+                else:
+                    param = str(param)
 
-                query.replace('?', param, 1)
+                query = query.replace('?', param, 1)
                 logger.debug(f'set parameter value {param}')
         except Exception as ex:
             logger.error(f'query parameter substitution encountered {ex}.')
