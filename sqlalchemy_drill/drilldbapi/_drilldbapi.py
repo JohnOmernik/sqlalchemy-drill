@@ -48,7 +48,7 @@ class Cursor(object):
 
     def __init__(self, conn):
 
-        self.arraysize: int = 200
+        self.arraysize: int = 1
         self.description: tuple = None
         self.connection = conn
         self.rowcount: int = -1
