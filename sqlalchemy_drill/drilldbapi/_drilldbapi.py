@@ -80,10 +80,12 @@ class Cursor(object):
 
     def _gen_description(self, col_types):
         blank = [None] * len(self.result_md['columns'])
+        dbapi_col_types = [DBAPITypeObject(col_type) for col_type in col_types]
+
         self.description = tuple(
             zip(
                 self.result_md['columns'],  # name
-                col_types or blank,  # type_code
+                dbapi_col_types or blank,  # type_code
                 blank,  # display_size
                 blank,  # internal_size
                 blank,  # precision
@@ -227,7 +229,7 @@ class Cursor(object):
             self._gen_description(basic_coltypes)
 
             self._typecaster_list = [
-                self.connection.typecasters.get(col, lambda v: v) for
+                self.connection.python_typecasters.get(col, lambda v: v) for
                 col in basic_coltypes
             ]
         else:
@@ -361,10 +363,10 @@ class Connection(object):
         logger.info(f'has connected to Drill version {self.drill_version}.')
 
         if self.drill_version < '1.19':
-            self.typecasters = {}
+            self.python_typecasters = {}
         else:
             # Starting in 1.19 the Drill REST API returns UNIX times
-            self.typecasters = {
+            self.python_typecasters = {
                 'DATE': lambda v: DateFromTicks(v),
                 'TIME': lambda v: TimeFromTicks(v),
                 'TIMESTAMP': lambda v: TimestampFromTicks(v)
@@ -562,6 +564,12 @@ class DBAPITypeObject:
             return 1
         else:
             return -1
+
+    def __eq__(self, other):
+        return self.values == other.values
+
+    def __hash__(self):
+        return hash(repr(self))
 
 
 # Mandatory type objects defined by DB-API 2 specs.
