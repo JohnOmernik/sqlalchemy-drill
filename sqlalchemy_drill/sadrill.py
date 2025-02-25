@@ -71,7 +71,7 @@ class DrillDialect_sadrill(DrillDialect):
     @classmethod
     def dbapi(cls):
         """Deprecated in SQLAlchemy, retained for backwards compatibility."""
-        DrillCompiler_sadrill.import_dbapi()
+        DrillDialect_sadrill.import_dbapi()
 
     def create_connect_args(self, url, **kwargs):
         url_port = url.port or 8047
