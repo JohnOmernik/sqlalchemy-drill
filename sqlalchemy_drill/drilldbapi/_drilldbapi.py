@@ -20,7 +20,6 @@ paramstyle = 'qmark'
 default_storage_plugin = ''
 
 logger = logging.getLogger('drilldbapi')
-logger.setLevel(logging.DEBUG)
 
 # Python DB API 2.0 classes
 
