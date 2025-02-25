@@ -1,4 +1,7 @@
 -r common.txt
 nose
 mock
+pytest
 coverage
+testcontainers
+dbapi-compliance

@@ -10,8 +10,9 @@ from itertools import chain, islice
 from datetime import date, time, datetime
 from time import gmtime
 from . import api_globals
-from .api_exceptions import AuthError, DatabaseError, ProgrammingError, \
-    CursorClosedException, ConnectionClosedException
+from .api_exceptions import (AuthError, ConnectionClosedException, CursorClosedException,
+                             DatabaseError, Error, IntegrityError, InterfaceError, InternalError,
+                             NotSupportedError, OperationalError, ProgrammingError, Warning)
 
 apilevel = '2.0'
 threadsafety = 3
@@ -30,10 +31,12 @@ class Cursor(object):
         query = string_query
         try:
             for param in parameters:
-                if type(param) == str:
+                if isinstance(param, str):
                     param = f"'{param}'"
+                else:
+                    param = str(param)
 
-                query.replace('?', param, 1)
+                query = query.replace('?', param, 1)
                 logger.debug(f'set parameter value {param}')
         except Exception as ex:
             logger.error(f'query parameter substitution encountered {ex}.')
@@ -46,7 +49,7 @@ class Cursor(object):
 
     def __init__(self, conn):
 
-        self.arraysize: int = 200
+        self.arraysize: int = 1
         self.description: tuple = None
         self.connection = conn
         self.rowcount: int = -1
@@ -76,10 +79,12 @@ class Cursor(object):
 
     def _gen_description(self, col_types):
         blank = [None] * len(self.result_md['columns'])
+        dbapi_col_types = [DBAPITypeObject(col_type) for col_type in col_types]
+
         self.description = tuple(
             zip(
                 self.result_md['columns'],  # name
-                col_types or blank,  # type_code
+                dbapi_col_types or blank,  # type_code
                 blank,  # display_size
                 blank,  # internal_size
                 blank,  # precision
@@ -139,6 +144,9 @@ class Cursor(object):
                     continue
 
                 if value == 'rows':
+                    # discard the array node itself
+                    next(self._result_event_stream)
+
                     self._row_stream = _items_once(
                         self._result_event_stream, 'rows.item'
                     )
@@ -220,12 +228,12 @@ class Cursor(object):
             self._gen_description(basic_coltypes)
 
             self._typecaster_list = [
-                self.connection.typecasters.get(col, lambda v: v) for
+                self.connection.python_typecasters.get(col, lambda v: v) for
                 col in basic_coltypes
             ]
         else:
             self._gen_description(None)
-            logger.warn(
+            logger.warning(
                 'encountered data before metadata, typecasting during '
                 'streaming by this module will not take place.  Upgrade '
                 'to Drill >= 1.19 or apply your own typecasting.'
@@ -293,13 +301,13 @@ class Cursor(object):
         '''Fetch all (remaining) rows of a query result.'''
         return self.fetchmany(-1)
 
-    def setinputsizes(sizes):
+    def setinputsizes(self, *sizes):
         '''Not supported.'''
-        logger.warn('setinputsizes is a no-op in this driver.')
+        logger.debug('setinputsizes is a no-op in this driver.')
 
-    def setoutputsize(size, column=0):
+    def setoutputsize(self, size, column=0):
         '''Not supported.'''
-        logger.warn('setoutputsize is a no-op in this driver.')
+        logger.debug('setoutputsize is a no-op in this driver.')
 
     @is_open
     def get_query_id(self) -> str:
@@ -354,10 +362,10 @@ class Connection(object):
         logger.info(f'has connected to Drill version {self.drill_version}.')
 
         if self.drill_version < '1.19':
-            self.typecasters = {}
+            self.python_typecasters = {}
         else:
             # Starting in 1.19 the Drill REST API returns UNIX times
-            self.typecasters = {
+            self.python_typecasters = {
                 'DATE': lambda v: DateFromTicks(v),
                 'TIME': lambda v: TimeFromTicks(v),
                 'TIMESTAMP': lambda v: TimestampFromTicks(v)
@@ -383,6 +391,9 @@ class Connection(object):
             timeout=None,
             stream=True
         )
+
+        logger.debug('received an HTTP response with body:')
+        logger.debug(resp.text)
 
         if resp.status_code == 200:
             return resp
@@ -414,12 +425,12 @@ class Connection(object):
             self._session.close()
             self._connected = False
         except Exception as ex:
-            logger.warn(f'encountered {ex} when try to close connection.')
+            logger.warning(f'encountered {ex} when try to close connection.')
             raise ConnectionClosedException('Failed to close connection')
 
     @connected
     def commit(self):
-        logger.info('A commit is a no-op in this driver.')
+        logger.debug('commit is a no-op in this driver.')
 
     @connected
     def cursor(self) -> Cursor:
@@ -502,21 +513,18 @@ class RequestsStreamWrapper(object):
 
 def _items_once(event_stream, prefix):
     '''
-    Generator dispatching native Python objects constructed from the ijson
-    events under the next occurrence of the given prefix.  It is very
-    similar to ijson.items except that it will not consume the entire JSON
-    stream looking for occurrences of prefix, but rather stop after
-    completing the *first* encountered occurrence of prefix.  The need for
-    this property is what precluded the use of ijson.items instead.
+    Generator dispatching native Python objects constructed from the ijson events under the next
+    occurrence of the given prefix.  It is similar similar to ijson.items except that it will
+    not consume the entire JSON stream looking for occurrences of prefix, but rather stop after
+    completing the current occurrence of prefix.  The need for this behaviour is what precluded
+    the use of ijson.items instead.
     '''
-    current = None
-    while current != prefix:
-        try:
-            current, event, value = next(event_stream)
-        except StopIteration:
-            return  # see PEP-479
 
-    logger.debug(f'found and will now parse an occurrence of {prefix}')
+    try:
+        current, event, value = next(event_stream)
+    except StopIteration:
+        return  # see PEP-479
+
     while current == prefix:
         if event in ('start_map', 'start_array'):
             object_depth = 1
@@ -536,7 +544,11 @@ def _items_once(event_stream, prefix):
         else:
             yield value
 
-        current, event, value = next(event_stream)
+        try:
+            current, event, value = next(event_stream)
+        except StopIteration:
+            return  # see PEP-479
+
     logger.debug(f'finished parsing one occurrence of {prefix}')
 
 
@@ -551,6 +563,12 @@ class DBAPITypeObject:
             return 1
         else:
             return -1
+
+    def __eq__(self, other):
+        return self.values == other.values
+
+    def __hash__(self):
+        return hash(repr(self))
 
 
 # Mandatory type objects defined by DB-API 2 specs.

@@ -47,6 +47,66 @@ class ProgrammingError(Error):
         )
 
 
+class InterfaceError(Error):
+
+    def __str__(self):
+        return repr(
+            "{msg} {type} {err}".format(
+                msg=self.message,
+                type="HTTP ERROR:",
+                err=self.httperror,
+            )
+        )
+
+
+class OperationalError(Error):
+
+    def __str__(self):
+        return repr(
+            "{msg} {type} {err}".format(
+                msg=self.message,
+                type="HTTP ERROR:",
+                err=self.httperror,
+            )
+        )
+
+
+class IntegrityError(Error):
+
+    def __str__(self):
+        return repr(
+            "{msg} {type} {err}".format(
+                msg=self.message,
+                type="HTTP ERROR:",
+                err=self.httperror,
+            )
+        )
+
+
+class InternalError(Error):
+
+    def __str__(self):
+        return repr(
+            "{msg} {type} {err}".format(
+                msg=self.message,
+                type="HTTP ERROR:",
+                err=self.httperror,
+            )
+        )
+
+
+class NotSupportedError(Error):
+
+    def __str__(self):
+        return repr(
+            "{msg} {type} {err}".format(
+                msg=self.message,
+                type="HTTP ERROR:",
+                err=self.httperror,
+            )
+        )
+
+
 class CursorClosedException(Error):
 
     def __init__(self, message):

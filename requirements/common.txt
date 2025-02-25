@@ -1,3 +1,4 @@
+ijson~=3.3.0
 sqlalchemy
 JayDeBeApi
 pyodbc

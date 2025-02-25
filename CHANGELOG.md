@@ -1,10 +1,20 @@
 ## [Unreleased]
 
+## [1.1.6] - 2025-02-24
+
+### Fixed
+
+- Parsing of empty result set data in sadrill.
+
+### Changed
+
+- Added a DB-API compliance test suite running against a local Drill using testcontainers.
+-
 ## [1.1.5] - 2024-06-04
 
 ### Fixed
 
-- Fix a leaked StopIteration from a generator.
+- Fix a leaked StopIteration from a generator in sadrill.
 
 ## [1.1.4] - 2023-10-23
 
