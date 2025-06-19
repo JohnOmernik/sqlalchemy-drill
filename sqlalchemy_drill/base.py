@@ -419,7 +419,7 @@ class DrillDialect(default.DefaultDialect):
             for row in column_metadata:
 
                 #  Get rid of precision information in data types
-                data_type = row[1].lower()
+                data_type = str(row[1]).lower()
                 pattern = r"[a-zA-Z]+\(\d+, \d+\)"
 
                 if re.search(pattern, data_type):
@@ -445,8 +445,8 @@ class DrillDialect(default.DefaultDialect):
         for row in query_results:
             column = {
                 "name": row[0],
-                "type": self.get_data_type(row[1].lower()),
-                "longType": self.get_data_type(row[1].lower())
+                "type": self.get_data_type(str(row[1]).lower()),
+                "longType": self.get_data_type(str(row[1]).lower())
             }
             result.append(column)
         logging.debug(result)
