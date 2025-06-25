@@ -493,7 +493,7 @@ def connect(host: str,
 
     conn = Connection(host, port, proto, impersonation_target, session)
     if db is not None:
-        conn.submit_query(f'USE {db.replace("%2F", ".")}')
+        conn.submit_query(f'USE {db}')
 
     return conn
 
