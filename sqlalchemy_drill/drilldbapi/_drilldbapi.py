@@ -24,8 +24,45 @@ from ijson.common import ObjectBuilder
 from requests import Session, Response
 
 from . import api_globals
-from .api_exceptions import (AuthError, ConnectionClosedException, CursorClosedException,
-                             DatabaseError, ProgrammingError)
+from .api_exceptions import (
+    AuthError,
+    ConnectionClosedException,
+    CursorClosedException,
+    DatabaseError,
+    DrillWarning,
+    Error,
+    IntegrityError,
+    InterfaceError,
+    InternalError,
+    NotSupportedError,
+    OperationalError,
+    ProgrammingError,
+)
+
+# DB-API 2.0 requires Warning to be exported at module level
+# We renamed it to DrillWarning to avoid shadowing built-in, but alias it here
+Warning = DrillWarning  # noqa: A001  # pylint: disable=redefined-builtin
+
+# Explicit exports for DB-API 2.0 compliance
+__all__ = [
+    # Module globals
+    'apilevel', 'threadsafety', 'paramstyle',
+    # Classes
+    'Connection', 'Cursor',
+    # Functions
+    'connect',
+    # Type objects
+    'STRING', 'BINARY', 'NUMBER', 'DATETIME', 'ROWID',
+    'BOOL', 'SMALLINT', 'INTEGER', 'LONG', 'FLOAT', 'NUMERIC',
+    'DATE', 'TIME', 'TIMESTAMP', 'INTERVAL',
+    # Type constructors
+    'Date', 'Time', 'Timestamp', 'DateFromTicks', 'TimeFromTicks', 'TimestampFromTicks', 'Binary',
+    # Exceptions (DB-API 2.0 required)
+    'Warning', 'Error', 'InterfaceError', 'DatabaseError', 'OperationalError',
+    'IntegrityError', 'InternalError', 'ProgrammingError', 'NotSupportedError',
+    # Additional exceptions
+    'AuthError', 'CursorClosedException', 'ConnectionClosedException',
+]
 
 apilevel = '2.0'
 threadsafety = 3
