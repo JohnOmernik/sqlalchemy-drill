@@ -1,0 +1,115 @@
+[MAIN]
+# Analyse import fallback blocks
+analyse-fallback-blocks=no
+
+# Load and enable all available extensions
+load-plugins=pylint.extensions.docparams
+
+# Files or directories to ignore
+ignore=CVS,.git,__pycache__,build,dist,*.egg-info
+
+# Python version
+py-version=3.10
+
+# Jobs to run in parallel (0 = auto-detect)
+jobs=0
+
+[MESSAGES CONTROL]
+# Disable specific messages
+disable=
+    C0114,  # missing-module-docstring
+    C0115,  # missing-class-docstring
+    C0116,  # missing-function-docstring
+    C0301,  # line-too-long (handled by formatter)
+    C0103,  # invalid-name (allow single letter variables, non-standard names)
+    R0801,  # duplicate-code
+    R0903,  # too-few-public-methods
+    R0913,  # too-many-arguments
+    R0914,  # too-many-locals
+    R0915,  # too-many-statements
+    R0902,  # too-many-instance-attributes
+    R0904,  # too-many-public-methods
+    R0912,  # too-many-branches
+    W0212,  # protected-access (common in SQLAlchemy dialects)
+    W0223,  # abstract-method (SQLAlchemy dialect methods)
+    W0613,  # unused-argument (required by interface)
+    W0703,  # broad-except
+    W1203,  # logging-fstring-interpolation
+    E1101,  # no-member (false positives with dynamic attributes)
+
+[FORMAT]
+# Maximum line length
+max-line-length=120
+
+# Expected indentation
+indent-string='    '
+
+[BASIC]
+# Good variable names
+good-names=i,j,k,v,f,ex,db,q,kw,fn,id,pk,fk
+
+# Naming style
+function-naming-style=snake_case
+variable-naming-style=snake_case
+class-naming-style=PascalCase
+const-naming-style=UPPER_CASE
+module-naming-style=snake_case
+
+[DESIGN]
+# Maximum number of arguments for function / method
+max-args=10
+
+# Maximum number of locals for function / method body
+max-locals=20
+
+# Maximum number of return / yield for function / method body
+max-returns=6
+
+# Maximum number of branch for function / method body
+max-branches=15
+
+# Maximum number of statements in function / method body
+max-statements=60
+
+# Maximum number of attributes for a class
+max-attributes=15
+
+[IMPORTS]
+# Allow wildcard imports from these modules
+allow-wildcard-with-all=no
+
+# Deprecated modules
+deprecated-modules=optparse
+
+[LOGGING]
+# Logging format style
+logging-format-style=new
+
+[TYPECHECK]
+# List of members which are set dynamically
+generated-members=
+    sqlalchemy.*,
+    types.*
+
+# Ignore missing members for these classes
+ignored-classes=
+    SQLObject,
+    optparse.Values,
+    thread._local,
+    _thread._local
+
+[SIMILARITIES]
+# Minimum lines number of a similarity
+min-similarity-lines=6
+
+# Ignore comments when computing similarities
+ignore-comments=yes
+
+# Ignore docstrings when computing similarities
+ignore-docstrings=yes
+
+# Ignore imports when computing similarities
+ignore-imports=yes
+
+# Allow DB-API 2.0 required function names
+function-rgx=[a-z_][a-z0-9_]{2,30}$|^(Date|Time|Timestamp|DateFromTicks|TimeFromTicks|TimestampFromTicks|Binary)$

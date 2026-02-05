@@ -23,6 +23,7 @@ lib64/
 parts/
 sdist/
 var/
+venv/
 *.egg-info/
 .installed.cfg
 *.egg
@@ -94,3 +95,4 @@ ENV/
 
 # Python IDE
 .idea/
+/token.txt

@@ -21,31 +21,36 @@
 
 from __future__ import absolute_import
 from __future__ import unicode_literals
-import pyodbc
 import logging
+
+import pyodbc
+
 from .base import DrillDialect, DrillCompiler_sadrill
+
+logger = logging.getLogger(__name__)
 
 
 class DrillDialect_odbc(DrillDialect):
     statement_compiler = DrillCompiler_sadrill
-    logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
-    def create_connect_args(self, url):
-        if url is not None:
-            params = super(DrillDialect, self).create_connect_args(url)[1]
+    def create_connect_args(self, url, **kwargs):
+        if url is None:
+            return [], {}
 
-            # Convert URL query parameters to ODBC connection string
-            connection_string = ";".join("{}={}".format(k, v) for (k, v) in params.items())
+        params = super(DrillDialect, self).create_connect_args(url)[1]
 
-            cargs = (connection_string, )
-            cparams = {
-                "autocommit": True,  # Drill ODBC driver does not support transactions
-            }
+        # Convert URL query parameters to ODBC connection string
+        connection_string = ";".join(f"{k}={v}" for k, v in params.items())
 
-            logging.info("Cargs:" + str(cargs))
-            logging.info("Cparams" + str(cparams))
+        cargs = (connection_string,)
+        cparams = {
+            "autocommit": True,  # Drill ODBC driver does not support transactions
+        }
 
-            return (cargs, cparams)
+        logger.info(f"Cargs: {cargs}")
+        logger.info(f"Cparams: {cparams}")
+
+        return cargs, cparams
 
     @classmethod
     def dbapi(cls):
