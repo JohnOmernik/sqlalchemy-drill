@@ -19,27 +19,17 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 from __future__ import unicode_literals
-from sqlalchemy import pool
-from sqlalchemy.engine import default
-from .base import DrillDialect, DrillIdentifierPreparer, DrillCompiler_sadrill
 import logging
+from urllib.parse import unquote
+
+from sqlalchemy import pool
+
+from .base import DrillDialect, DrillIdentifierPreparer, DrillCompiler_sadrill
 
 logger = logging.getLogger('sadrill')
-
-try:
-    from sqlalchemy.sql.compiler import SQLCompiler
-except ImportError:
-    from sqlalchemy.sql.compiler import DefaultCompiler as SQLCompiler
-
-
-try:
-    from sqlalchemy.types import BigInteger
-except ImportError:
-    from sqlalchemy.databases.mysql import MSBigInteger as BigInteger
 
 
 class DrillDialect_sadrill(DrillDialect):
@@ -60,12 +50,20 @@ class DrillDialect_sadrill(DrillDialect):
     supports_native_boolean = True
 
     def __init__(self, **kw):
-        default.DefaultDialect.__init__(self, **kw)
+        super().__init__(**kw)
         self.supported_extensions = []
+        # Initialize attributes that will be set in create_connect_args
+        self.host = None
+        self.port = None
+        self.username = None
+        self.password = None
+        self.db = None
+        self.storage_plugin = None
+        self.workspace = None
 
     @classmethod
     def import_dbapi(cls):
-        import sqlalchemy_drill.drilldbapi as module
+        import sqlalchemy_drill.drilldbapi as module  # pylint: disable=import-outside-toplevel
         return module
 
     @classmethod
@@ -78,7 +76,9 @@ class DrillDialect_sadrill(DrillDialect):
         qargs = {'host': url.host, 'port': url_port}
 
         try:
-            db_parts = (url.database or 'drill').split('/')
+            # URL-decode the database path to handle encoded characters like %2F -> /
+            raw_database = unquote(url.database) if url.database else 'drill'
+            db_parts = raw_database.split('/')
             db = '.'.join(db_parts)
 
             # Save this for later use.
@@ -97,6 +97,11 @@ class DrillDialect_sadrill(DrillDialect):
 
             qargs.update(url.query)
             qargs['db'] = db
+
+            # Convert stream_results to boolean if present
+            if 'stream_results' in qargs:
+                qargs['stream_results'] = qargs['stream_results'] in [True, 'True', 'true', '1']
+
             if url.username:
                 qargs['drilluser'] = url.username
                 qargs['drillpass'] = ''
@@ -104,6 +109,6 @@ class DrillDialect_sadrill(DrillDialect):
                     qargs['drillpass'] = url.password
         except Exception as ex:
             logger.error('could not parse the provided connection url.')
-            raise(ex)
+            raise ex
 
         return [], qargs

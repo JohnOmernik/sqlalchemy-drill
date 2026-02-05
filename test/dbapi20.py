@@ -18,7 +18,7 @@ than just syntactic limitations, entire test methods are overriden in test_dbapi
     -- Ian Bicking
 '''
 
-__version__ = '1.15.0-drill'
+__version__ = '1.22.0-drill'
 
 import unittest
 import time

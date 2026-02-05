@@ -1,18 +1,31 @@
 # -*- coding: utf-8 -*-
-from json import dumps
-from typing import List
-from requests import Session, Response
-import re
+"""
+This module provides the implementation of the Cursor object for interfacing with
+the Drill database. It adheres to the Python DB API 2.0 standard, enabling execution
+of SQL queries, retrieval of data, and management of cursor states.
+
+This module fetches and processes query results from Drill, supporting both
+metadata extraction and data streaming for enhanced query handling.
+
+Classes:
+- Cursor: Encapsulates the functionality for executing SQL statements, retrieving
+  query results, and maintaining database connection integrity.
+"""
 import logging
+import re
+from datetime import date, time, datetime
+from itertools import chain, islice
+from json import dumps
+from time import gmtime
+from typing import List
+
 from ijson import parse
 from ijson.common import ObjectBuilder
-from itertools import chain, islice
-from datetime import date, time, datetime
-from time import gmtime
+from requests import Session, Response
+
 from . import api_globals
 from .api_exceptions import (AuthError, ConnectionClosedException, CursorClosedException,
-                             DatabaseError, Error, IntegrityError, InterfaceError, InternalError,
-                             NotSupportedError, OperationalError, ProgrammingError, Warning)
+                             DatabaseError, ProgrammingError)
 
 apilevel = '2.0'
 threadsafety = 3
@@ -24,10 +37,11 @@ logger = logging.getLogger('drilldbapi')
 # Python DB API 2.0 classes
 
 
-class Cursor(object):
+class Cursor:
 
     @staticmethod
     def substitute_in_query(string_query, parameters):
+        logger.info(f'substitutes parameters in query {string_query}.')
         query = string_query
         try:
             for param in parameters:
@@ -43,7 +57,7 @@ class Cursor(object):
             raise ProgrammingError(
                 'Could not substitute query parameter values',
                 None
-            )
+            ) from ex
 
         return query
 
@@ -61,7 +75,7 @@ class Cursor(object):
         self._typecaster_list: list = None
 
     def is_open(func):
-        '''Decorator for methods which require a connection'''
+        """Decorator for methods which require a connection"""
 
         def func_wrapper(self, *args, **kwargs):
             if self._is_open is False:
@@ -195,7 +209,7 @@ class Cursor(object):
                             operation, re.IGNORECASE)
         if matchObj:
             self._default_storage_plugin = matchObj.group(1)
-            logger.debug(
+            logger.info(
                 'sets the default storage plugin to '
                 f'{self._default_storage_plugin}'
             )
@@ -339,13 +353,14 @@ class Cursor(object):
         return self
 
 
-class Connection(object):
+class Connection:
     def __init__(self,
                  host: str,
                  port: int,
                  proto: str,
                  impersonation_target: str,
-                 session: Session):
+                 session: Session,
+                 stream_results: bool = True):
         if session is None:
             raise ProgrammingError('A Requests session is required.', None)
 
@@ -353,6 +368,7 @@ class Connection(object):
         self._session = session
         self._connected = True
         self._impersonation_target = impersonation_target
+        self._stream_results = stream_results
 
         logger.debug('queries Drill\'s version number...')
         resp = self.submit_query(
@@ -366,22 +382,25 @@ class Connection(object):
         else:
             # Starting in 1.19 the Drill REST API returns UNIX times
             self.python_typecasters = {
-                'DATE': lambda v: DateFromTicks(v),
-                'TIME': lambda v: TimeFromTicks(v),
-                'TIMESTAMP': lambda v: TimestampFromTicks(v)
+                'DATE': DateFromTicks,
+                'TIME': TimeFromTicks,
+                'TIMESTAMP': TimestampFromTicks
             }
-            logger.debug(
-                'sets up typecasting functions for Drill >= 1.19.'
-            )
+            logger.debug('sets up typecasting functions for Drill >= 1.19.')
 
-    def submit_query(self, query: str):
+    def submit_query(self, query: str, stream: bool = None):
+        logger.debug(f'submits a query: {query}')
         payload = api_globals._PAYLOAD.copy()
         payload['userName'] = self._impersonation_target
 
         # TODO: autoLimit, defaultSchema
         payload['query'] = query
 
-        logger.debug('sends an HTTP POST with payload')
+        # Use connection default if not specified
+        if stream is None:
+            stream = self._stream_results
+
+        logger.debug(f'sends an HTTP POST with payload (stream={stream})')
         logger.debug(payload)
 
         resp = self._session.post(
@@ -389,7 +408,7 @@ class Connection(object):
             data=dumps(payload),
             headers=api_globals._HEADER,
             timeout=None,
-            stream=True
+            stream=stream
         )
 
         logger.debug('received an HTTP response with body:')
@@ -397,11 +416,11 @@ class Connection(object):
 
         if resp.status_code == 200:
             return resp
-        else:
-            raise DatabaseError(
-                resp.json().get('errorMessage', None),
-                resp.status_code
-            )
+
+        raise DatabaseError(
+            resp.json().get('errorMessage', None),
+            resp.status_code
+        )
 
     # Decorator for methods which require connection
     def connected(func):
@@ -426,7 +445,7 @@ class Connection(object):
             self._connected = False
         except Exception as ex:
             logger.warning(f'encountered {ex} when try to close connection.')
-            raise ConnectionClosedException('Failed to close connection')
+            raise ConnectionClosedException('Failed to close connection') from ex
 
     @connected
     def commit(self):
@@ -446,9 +465,37 @@ def connect(host: str,
             drilluser: str = None,
             drillpass: str = None,
             verify_ssl: bool = False,
-            impersonation_target: str = None
+            impersonation_target: str = None,
+            stream_results: bool = True
             ) -> Connection:
+    """
+    Establishes a connection with an Apache Drill server.
 
+    This method sets up a connection to an Apache Drill server using the specified
+    host, port, and authentication credentials. It supports both secure (SSL/TLS)
+    and non-secure connections. If the connection is successful, it returns a
+    `Connection` object, which can be used to execute queries and interact with
+    the Drill server.
+
+    Parameters:
+    host (str): The hostname or IP address of the Apache Drill server.
+    port (int, optional): The port number of the Apache Drill server. Defaults to 8047.
+    db (str, optional): The initial database/schema to connect to. If not provided, no specific schema is selected.
+    use_ssl (bool, optional): Flag indicating whether to use SSL/TLS for the connection. Defaults to False.
+    drilluser (str, optional): The username to authenticate with. If not provided, it uses anonymous authentication.
+    drillpass (str, optional): The password for the given username. Required if `drilluser` is provided.
+    verify_ssl (bool, optional): Whether to verify the SSL certificates for secure connections. Defaults to False.
+    impersonation_target (str, optional): The impersonation target to use for the connection. If provided, operations
+                                           will be performed as the specified user.
+    stream_results (bool, optional): Flag to enable or disable streaming of query results. Defaults to True.
+
+    Returns:
+    Connection: An object representing the established connection to the Apache Drill server.
+
+    Raises:
+    DatabaseError: If the connection to the Apache Drill server could not be established or an error occurs with the server.
+    AuthError: If authentication fails due to invalid username or password.
+    """
     session = Session()
 
     session.verify = verify_ssl
@@ -491,14 +538,14 @@ def connect(host: str,
         logger.error('failed to authenticate to Drill.')
         raise AuthError(str(raw_data), response.status_code)
 
-    conn = Connection(host, port, proto, impersonation_target, session)
+    conn = Connection(host, port, proto, impersonation_target, session, stream_results)
     if db is not None:
         conn.submit_query(f'USE {db}')
 
     return conn
 
 
-class RequestsStreamWrapper(object):
+class RequestsStreamWrapper:
     """
     A wrapper around a Requests response payload for converting
     the returned generator into a file-like object.
@@ -561,8 +608,7 @@ class DBAPITypeObject:
             return 0
         if other < self.values:
             return 1
-        else:
-            return -1
+        return -1
 
     def __eq__(self, other):
         return self.values == other.values

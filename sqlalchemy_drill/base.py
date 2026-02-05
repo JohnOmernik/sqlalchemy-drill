@@ -21,40 +21,49 @@
 
 from __future__ import absolute_import
 from __future__ import unicode_literals
+import logging
+from urllib.parse import unquote
+
 from sqlalchemy import exc, pool, types
 from sqlalchemy.engine import default
 from sqlalchemy.sql import compiler
 from sqlalchemy import inspect
-import re
-import logging
 
-try:
-    from sqlalchemy.sql.compiler import SQLCompiler
-except ImportError:
-    from sqlalchemy.sql.compiler import DefaultCompiler as SQLCompiler
+logger = logging.getLogger('drilldbapi')
 
-logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.ERROR)
 
 _type_map = {
     'bit': types.BOOLEAN,
     'bigint': types.BIGINT,
     'binary': types.LargeBinary,
+    'varbinary': types.LargeBinary,
     'boolean': types.BOOLEAN,
     'date': types.DATE,
     'decimal': types.DECIMAL,
+    'numeric': types.NUMERIC,
     'double': types.FLOAT,
+    'float': types.FLOAT,
+    'float4': types.FLOAT,
+    'float8': types.FLOAT,
+    'real': types.FLOAT,
     'int': types.INTEGER,
     'integer': types.INTEGER,
-    'interval': types.Interval,
+    'tinyint': types.SMALLINT,
     'smallint': types.SMALLINT,
+    'interval': types.Interval,
     'timestamp': types.TIMESTAMP,
     'time': types.TIME,
     'varchar': types.String,
+    'char': types.String,
+    'character': types.String,
     'character varying': types.String,
+    'string': types.String,
     'any': types.String,
+    'null': types.NullType,
     'map': types.UserDefinedType,
     'list': types.UserDefinedType,
-    'float8': types.FLOAT,
+    'struct': types.UserDefinedType,
+    'array': types.UserDefinedType,
     'json': types.JSON,
 }
 
@@ -69,36 +78,31 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
         return " FROM (values(1))"
 
     def visit_char_length_func(self, fn, **kw):
-        return 'length{}'.format(self.function_argspec(fn, **kw))
+        return f'length{self.function_argspec(fn, **kw)}'
 
     def visit_table(self, table, asfrom=False, **kwargs):
-
+        logger.debug(f"table: {table}")
         if asfrom:
             try:
                 fixed_schema = ""
                 if table.schema != "":
                     fixed_schema = ".".join(
-                        ["`{i}`".format(i=i.replace('`', '')) for i in table.schema.split(".")])
-                fixed_table = "{fixed_schema}.`{table_name}`".format(
-                    fixed_schema=fixed_schema, table_name=table.name.replace(
-                        "`", "")
-                )
+                        [f"`{i.replace('`', '')}`" for i in table.schema.split(".")])
+                fixed_table = f"{fixed_schema}.`{table.name.replace('`', '')}`"
                 return fixed_table
             except Exception as ex:
-                logging.error(
-                    "Error in DrillCompiler_sadrill.visit_table :: " + str(ex))
-
-        else:
-            return ""
+                logger.error(f"Error in DrillCompiler_sadrill.visit_table :: {ex}")
+                return ""
+        return ""
 
     def visit_tablesample(self, tablesample, asfrom=False, **kw):
-        logging.debug(tablesample)
+        logger.info(f"{tablesample}")
 
 
 class DrillTypeCompiler_sadrill(compiler.GenericTypeCompiler):
 
     def visit_JSON(self, type_, **kwargs):
-        # TODO might need to do more to fully enable json support
+        # NOTE: might need to do more to fully enable json support
         # see https://gist.github.com/slitayem/c7b87d3f329caaa9794a408ad83ef0e5
         #
         # adding this class+method (plus adding json to `_type_map` above)
@@ -139,7 +143,7 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
             'nchar', 'nclob', 'new', 'no', 'none', 'normalize', 'not', 'null', 'nullif', 'numeric', 'octet_length',
             'of', 'offset', 'old', 'on', 'only', 'open', 'or', 'order', 'out', 'outer', 'over', 'overlaps', 'overlay',
             'parameter', 'partition', 'percentile_cont', 'percentile_disc', 'percent_rank', 'position', 'power',
-            'precision', 'prepare', 'primary', 'procedure', 'properties', 'range', 'rank', 'reads', 'real', 'recursive', 
+            'precision', 'prepare', 'primary', 'procedure', 'properties', 'range', 'rank', 'reads', 'real', 'recursive',
             'ref', 'references', 'referencing', 'regr_avgx', 'regr_avgy', 'regr_count', 'regr_intercept', 'regr_r2',
             'regr_slope', 'regr_sxx', 'regr_sxy', 'release', 'replace', 'result', 'return', 'returns', 'revoke',
             'right', 'rollback', 'rollup', 'row', 'rows', 'row_number', 'savepoint', 'schemas', 'scope', 'scroll',
@@ -155,8 +159,7 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
     )
 
     def __init__(self, dialect):
-        super(DrillIdentifierPreparer, self).__init__(
-            dialect, initial_quote='`', final_quote='`')
+        super().__init__(dialect, initial_quote='`', final_quote='`')
 
     def format_drill_table(self, schema, isFile=True):
         formatted_schema = ""
@@ -193,7 +196,6 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
 class DrillDialect(default.DefaultDialect):
     name = 'drilldbapi'
     driver = 'rest'
-    dbapi = ""
     preparer = DrillIdentifierPreparer
     statement_compiler = DrillCompiler_sadrill
     type_compiler = DrillTypeCompiler_sadrill
@@ -209,20 +211,36 @@ class DrillDialect(default.DefaultDialect):
     supports_native_boolean = True
 
     def __init__(self, **kw):
-        default.DefaultDialect.__init__(self, **kw)
+        super().__init__(**kw)
         self.supported_extensions = []
+        # Initialize attributes that will be set in create_connect_args
+        self.host = None
+        self.port = None
+        self.username = None
+        self.password = None
+        self.db = None
+        self.storage_plugin = None
+        self.workspace = None
+        self.plugin_type = None
+        self.quoted_schema = None
+
+    @classmethod
+    def import_dbapi(cls):
+        import sqlalchemy_drill.drilldbapi as module  # pylint: disable=import-outside-toplevel
+        return module
 
     @classmethod
     def dbapi(cls):
-        import sqlalchemy_drill.drilldbapi as module
-        return module
+        return cls.import_dbapi()
 
     def create_connect_args(self, url, **kwargs):
         url_port = url.port or 8047
         qargs = {'host': url.host, 'port': url_port}
 
         try:
-            db_parts = (url.database or 'drill').split('/')
+            # URL-decode the database path to handle encoded characters like %2F -> /
+            raw_database = unquote(url.database) if url.database else 'drill'
+            db_parts = raw_database.split('/')
             db = ".".join(db_parts)
 
             # Save this for later use.
@@ -241,14 +259,18 @@ class DrillDialect(default.DefaultDialect):
 
             qargs.update(url.query)
             qargs['db'] = db
+
+            # Convert stream_results to boolean if present
+            if 'stream_results' in qargs:
+                qargs['stream_results'] = qargs['stream_results'] in [True, 'True', 'true', '1']
+
             if url.username:
                 qargs['drilluser'] = url.username
                 qargs['drillpass'] = ""
                 if url.password:
                     qargs['drillpass'] = url.password
         except Exception as ex:
-            logging.error(
-                "Error in DrillDialect_sadrill.create_connect_args :: " + str(ex))
+            logger.error(f"Error in DrillDialect_sadrill.create_connect_args :: {ex}")
 
         return [], qargs
 
@@ -269,7 +291,6 @@ class DrillDialect(default.DefaultDialect):
         return []
 
     def get_schema_names(self, connection, **kw):
-
         # Get table information
         query = "SHOW DATABASES"
 
@@ -277,18 +298,19 @@ class DrillDialect(default.DefaultDialect):
         result = []
         try:
             for row in curs:
-                if row.SCHEMA_NAME != "cp.default" and row.SCHEMA_NAME != "INFORMATION_SCHEMA" and row.SCHEMA_NAME != "dfs.default":
+                if row.SCHEMA_NAME not in ('cp.default', 'INFORMATION_SCHEMA', 'dfs.default'):
                     result.append(row.SCHEMA_NAME)
         except Exception as ex:
-            logging.error(
-                ("Error in DrillDialect_sadrill.get_schema_names :: ", str(ex)))
+            logger.error(f"Error in DrillDialect_sadrill.get_schema_names :: {ex}")
 
         return tuple(result)
 
     def get_selected_workspace(self):
+        logger.info(f"Selected Workspace: {self.workspace}")
         return self.workspace
 
     def get_selected_storage_plugin(self):
+        logger.info(f"Storage Plugin: {self.storage_plugin}")
         return self.storage_plugin
 
     def get_table_names(self, connection, schema=None, **kw):
@@ -313,56 +335,50 @@ class DrillDialect(default.DefaultDialect):
                     if row.name.find(".view.drill") >= 0:
                         # Exclude views
                         continue
-                        #myname = row.name.replace(".view.drill", "")
-                    else:
-                        myname = row.name
+                    myname = row.name
                     tables_names.append(myname)
 
             except Exception as ex:
-                logging.error(
-                    "Error in DrillDialect_sadrill.get_table_names :: " + str(ex))
+                logger.error(f"Error in DrillDialect_sadrill.get_table_names :: {ex}")
 
             return tuple(tables_names)
-        else:
-            curs = connection.execute(
-                "SELECT `TABLE_NAME` AS name FROM INFORMATION_SCHEMA.`TABLES` WHERE `TABLE_SCHEMA` = '" + schema + "'")
-            tables_names = []
-            try:
-                for row in curs:
-                    if row.name.find(".view.drill") >= 0:
-                        myname = row.name.replace(".view.drill", "")
-                    else:
-                        myname = row.name
-                    tables_names.append(myname)
 
-            except Exception as ex:
-                logging.error(
-                    "Error in DrillDialect_sadrill.get_table_names :: " + str(ex))
+        curs = connection.execute(
+            f"SELECT `TABLE_NAME` AS name FROM INFORMATION_SCHEMA.`TABLES` WHERE `TABLE_SCHEMA` = '{schema}'")
+        tables_names = []
+        try:
+            for row in curs:
+                if row.name.find(".view.drill") >= 0:
+                    myname = row.name.replace(".view.drill", "")
+                else:
+                    myname = row.name
+                tables_names.append(myname)
 
-            return tuple(tables_names)
+        except Exception as ex:
+            logger.error(f"Error in DrillDialect_sadrill.get_table_names :: {ex}")
+
+        return tuple(tables_names)
 
     def get_view_names(self, connection, schema=None, **kw):
         view_names = []
         curs = connection.execute(
-            "SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.views WHERE table_schema='" + schema + "'")
+            f"SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.views WHERE table_schema='{schema}'")
         try:
             for row in curs:
                 myname = row.TABLE_NAME
                 view_names.append(myname)
 
         except Exception as ex:
-            logging.error(
-                "Error in DrillDialect_sadrill.get_view_names :: " + str(ex))
+            logger.error(f"Error in DrillDialect_sadrill.get_view_names :: {ex}")
 
         return tuple(view_names)
 
-    def has_table(self, connection, table_name, schema=None):
+    def has_table(self, connection, table_name, schema=None, **kwargs) -> bool:
         try:
             self.get_columns(connection, table_name, schema)
             return True
-        except exc.NoSuchTableError:
-            logging.error(
-                "Error in DrillDialect_sadrill.has_table :: " + exc.NoSuchTableError)
+        except exc.NoSuchTableError as e:
+            logger.error(f"Error in DrillDialect_sadrill.has_table :: {e}")
             return False
 
     def _check_unicode_returns(self, connection, additional_tests=None):
@@ -373,57 +389,57 @@ class DrillDialect(default.DefaultDialect):
         # requests gives back Unicode strings
         return True
 
+    @staticmethod
     def object_as_dict(obj):
         return {c.key: getattr(obj, c.key)
                 for c in inspect(obj).mapper.column_attrs}
 
     def get_data_type(self, data_type):
+        logger.debug(f"Drill data type: {data_type}")
         try:
-            dt = _type_map[data_type]
-        except:
-            dt = types.UserDefinedType
-        return dt
+            return _type_map[data_type]
+        except KeyError:
+            logger.warning(f"Unknown Drill data type: '{data_type}', using UserDefinedType")
+            return types.UserDefinedType
 
     def get_columns(self, connection, table_name, schema=None, **kw):
         result = []
 
         plugin_type = self.get_plugin_type(connection, schema)
 
-        # Since MongoDB uses the ** notation, bypass that and query the data directly.
-        if plugin_type == "file" or plugin_type == "mongo":
+        # Plugins with dynamic schemas use ** notation - query data directly
+        if plugin_type in ('file', 'mongo', 'splunk'):
             views = self.get_view_names(connection, schema)
 
             file_name = schema + "." + table_name
             quoted_file_name = self.identifier_preparer.format_drill_table(
                 file_name, isFile=True)
 
-            # Since MongoDB uses the ** notation, bypass that and query the data directly.
+            # MongoDB and Splunk use ** notation - query data directly to get schema
             if plugin_type == "mongo":
-                print("FILE NAME:", file_name, quoted_file_name)
                 mongo_quoted_file_name = self.identifier_preparer.format_drill_table(
                     file_name, isFile=False)
-                q = "SELECT `**` FROM {table_name} LIMIT 1".format(
-                    table_name=mongo_quoted_file_name)
+                q = f"SELECT `**` FROM {mongo_quoted_file_name} LIMIT 1"
             elif table_name in views:
-                logging.debug("View: ", quoted_file_name, table_name, schema)
-                view_name = "`{schema}`.`{table_name}`".format(
-                    schema=schema, table_name=table_name)
-                q = "SELECT * FROM {file_name} LIMIT 1".format(
-                    file_name=view_name)
+                logger.debug(f"View: {quoted_file_name}, {table_name}, {schema}")
+                view_name = f"`{schema}`.`{table_name}`"
+                q = f"SELECT * FROM {view_name} LIMIT 1"
             else:
-                q = "SELECT * FROM {file_name} LIMIT 1".format(
-                    file_name=quoted_file_name)
+                q = f"SELECT * FROM {quoted_file_name} LIMIT 1"
 
             column_metadata = connection.execute(q).cursor.description
 
             for row in column_metadata:
-
-                #  Get rid of precision information in data types
-                data_type = str(row[1]).lower()
-                pattern = r"[a-zA-Z]+\(\d+, \d+\)"
-
-                if re.search(pattern, data_type):
+                # row[1] is a DBAPITypeObject - extract the type name from its values
+                type_obj = row[1]
+                if hasattr(type_obj, 'values') and type_obj.values:
+                    data_type = type_obj.values[0].lower()
+                else:
+                    data_type = str(type_obj).lower()
+                # Strip precision info like varchar(100) or decimal(10, 2)
+                if '(' in data_type:
                     data_type = data_type.split('(')[0]
+                logger.debug(f"Getting data type: {data_type}")
                 drill_data_type = self.get_data_type(data_type)
                 column = {
                     "name": row[0],
@@ -431,44 +447,47 @@ class DrillDialect(default.DefaultDialect):
                     "longtype": drill_data_type
                 }
                 result.append(column)
+            logger.debug(f"GET COLUMN QUERY RESULTS: {result}")
             return result
 
-        elif "SELECT " in table_name:
-            q = "SELECT * FROM ({table_name}) LIMIT 1".format(table_name=table_name)
+        if "SELECT " in table_name:
+            q = f"SELECT * FROM ({table_name}) LIMIT 1"
         else:
             quoted_schema = self.identifier_preparer.format_drill_table(
                 schema + "." + table_name, isFile=False)
-            q = "DESCRIBE {table_name}".format(table_name=quoted_schema)
-        logging.debug("QUERY:" + q)
+            q = f"DESCRIBE {quoted_schema}"
+        logger.debug(f"QUERY: {q}")
         query_results = connection.execute(q)
 
         for row in query_results:
+            logger.debug(f"Getting (1) data type: {row[1].lower()}")
+
             column = {
                 "name": row[0],
                 "type": self.get_data_type(str(row[1]).lower()),
                 "longType": self.get_data_type(str(row[1]).lower())
             }
             result.append(column)
-        logging.debug(result)
+        logger.debug(f"Result: {result}")
         return result
 
     def get_plugin_type(self, connection, plugin=None):
         if plugin is None:
-            return
+            return None
 
         try:
-            query = "SELECT SCHEMA_NAME, TYPE FROM INFORMATION_SCHEMA.`SCHEMATA` WHERE SCHEMA_NAME LIKE '%" + plugin.replace(
-                '`', '') + "%'"
+            query = f"""SELECT SCHEMA_NAME, TYPE
+            FROM INFORMATION_SCHEMA.`SCHEMATA`
+            WHERE SCHEMA_NAME LIKE '%{plugin.replace('`', '')}%'"""
 
             rows = connection.execute(query).fetchall()
             plugin_type = ""
             for row in rows:
                 plugin_type = row[1]
-                plugin_name = row[0]
+                # plugin_name = row[0]  # unused
 
             return plugin_type
 
         except Exception as ex:
-            logging.error(
-                "Error in DrillDialect_sadrill.get_plugin_type :: " + str(ex))
-            return False
+            logger.error(f"Error in DrillDialect_sadrill.get_plugin_type :: {ex}")
+            return None
