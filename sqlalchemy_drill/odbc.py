@@ -32,6 +32,11 @@ logger = logging.getLogger(__name__)
 
 class DrillDialect_odbc(DrillDialect):
     statement_compiler = DrillCompiler_sadrill
+    supports_statement_cache = True
+
+    # See DrillDialect_jdbc: ``driver`` is inherited and still reports "rest".
+    # Left unchanged here because correcting it is a public metadata change
+    # that should be reviewed on its own, not because anything depends on it.
 
     def create_connect_args(self, url, **kwargs):
         if url is None:
@@ -53,8 +58,13 @@ class DrillDialect_odbc(DrillDialect):
         return cargs, cparams
 
     @classmethod
-    def dbapi(cls):
+    def import_dbapi(cls):
         return pyodbc
+
+    @classmethod
+    def dbapi(cls):
+        """Compatibility alias for SQLAlchemy versions predating 2.0."""
+        return cls.import_dbapi()
 
 
 dialect = DrillDialect_odbc

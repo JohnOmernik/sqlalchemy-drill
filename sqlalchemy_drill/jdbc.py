@@ -48,6 +48,15 @@ class DrillDialect_jdbc(DrillDialect):
     jdbc_db_name = "drill"
     jdbc_driver_name = "org.apache.drill.jdbc.Driver"
     statement_compiler = DrillCompiler_sadrill
+    supports_statement_cache = True
+
+    # ``driver`` is still inherited from DrillDialect, so this class reports
+    # ``driver == "rest"`` even though it speaks JDBC.  That is wrong, but it
+    # is pre-existing public metadata and correcting it is a visible API change
+    # that deserves its own review, so it is left alone here rather than
+    # changed as a side effect of the DB-API hook fix.  Nothing in this package
+    # dispatches on ``driver``, and it is not a TLS control: JDBC transport
+    # security is configured entirely through the JDBC URL.
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -98,8 +107,13 @@ class DrillDialect_jdbc(DrillDialect):
         return f"jdbc:drill:drillbit={url.host}:{url.port or 31010}"
 
     @classmethod
-    def dbapi(cls):
+    def import_dbapi(cls):
         return dbapi2
+
+    @classmethod
+    def dbapi(cls):
+        """Compatibility alias for SQLAlchemy versions predating 2.0."""
+        return cls.import_dbapi()
 
 
 dialect = DrillDialect_jdbc

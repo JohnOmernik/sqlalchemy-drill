@@ -48,6 +48,7 @@ class DrillDialect_sadrill(DrillDialect):
     returns_unicode_strings = True
     description_encoding = None
     supports_native_boolean = True
+    supports_statement_cache = True
 
     def __init__(self, **kw):
         super().__init__(**kw)

@@ -14,8 +14,11 @@ Classes:
 import logging
 import re
 from datetime import date, time, datetime
+from decimal import Decimal
 from itertools import chain, islice
 from json import dumps
+from math import isfinite
+from numbers import Integral, Real
 from time import gmtime
 from typing import List
 
@@ -77,26 +80,143 @@ logger = logging.getLogger('drilldbapi')
 class Cursor:
 
     @staticmethod
-    def substitute_in_query(string_query, parameters):
-        logger.info(f'substitutes parameters in query {string_query}.')
-        query = string_query
-        try:
-            for param in parameters:
-                if isinstance(param, str):
-                    param = f"'{param}'"
-                else:
-                    param = str(param)
+    def _sql_literal(value):
+        """Render a DB-API parameter as one Drill SQL literal.
 
-                query = query.replace('?', param, 1)
-                logger.debug(f'set parameter value {param}')
-        except Exception as ex:
-            logger.error(f'query parameter substitution encountered {ex}.')
+        Values that Drill cannot represent as a literal are rejected here
+        rather than rendered into SQL that is guaranteed to fail server side.
+        """
+        if value is None:
+            return 'NULL'
+        if isinstance(value, bool):
+            return 'TRUE' if value else 'FALSE'
+        if isinstance(value, str):
+            return "'" + value.replace("'", "''") + "'"
+        if isinstance(value, (bytes, bytearray, memoryview)):
+            # Drill 1.21.2 parses X'..' but cannot evaluate it:
+            # "Unable to convert the value of X'deadbeef':BINARY(4) ... to a
+            # Drill constant expression".
             raise ProgrammingError(
-                'Could not substitute query parameter values',
-                None
-            ) from ex
+                'Drill cannot accept binary literals over the REST API; '
+                'encode the value (for example as base64 text) first',
+                None,
+            )
+        if isinstance(value, datetime):
+            if value.tzinfo is not None:
+                raise ProgrammingError(
+                    'Drill TIMESTAMP literals are time zone naive; convert '
+                    'the datetime to a naive value first',
+                    None,
+                )
+            # Drill requires 'yyyy-MM-dd HH:mm:ss'; the ISO 'T' separator
+            # raises DateTimeParseException server side.
+            return "'" + value.isoformat(sep=' ') + "'"
+        if isinstance(value, time):
+            if value.tzinfo is not None:
+                raise ProgrammingError(
+                    'Drill TIME literals are time zone naive; convert the '
+                    'time to a naive value first',
+                    None,
+                )
+            return "'" + value.isoformat() + "'"
+        if isinstance(value, date):
+            return "'" + value.isoformat() + "'"
+        if isinstance(value, Decimal):
+            if not value.is_finite():
+                raise ProgrammingError(
+                    f'Drill has no literal for the decimal value {value}',
+                    None,
+                )
+            return str(value)
+        if isinstance(value, Integral):
+            return str(int(value))
+        if isinstance(value, Real):
+            number = float(value)
+            if not isfinite(number):
+                # str(float("nan")) is "nan", which Drill would parse as a
+                # column reference rather than a number.
+                raise ProgrammingError(
+                    f'Drill has no literal for the float value {number}',
+                    None,
+                )
+            return repr(number)
+        raise ProgrammingError(
+            f'Unsupported query parameter type: {type(value).__name__}',
+            None,
+        )
 
-        return query
+    # One pass over the SQL text, matching whole lexical units so that a
+    # question mark inside a string, a quoted identifier or a comment is never
+    # mistaken for a placeholder.  Each quoted form uses the doubled-delimiter
+    # escape that Drill accepts, and each closing delimiter is optional so an
+    # unterminated construct swallows the rest of the statement instead of
+    # exposing later text as SQL. Drill 1.21.2 Parser.jj (8581-8612) uses
+    # longest-match openers: a formal comment consumes /** AND the following
+    # non-slash character before looking for */. Thus /***/ is unterminated,
+    # just like /*/. Never reuse an opener character as part of the closer.
+    _TOKEN_PATTERN = re.compile(
+        r"""
+          '[^']*(?:''[^']*)*'?          # string literal
+        | "[^"]*(?:""[^"]*)*"?          # double-quoted identifier
+        | `[^`]*(?:``[^`]*)*`?          # backtick-quoted identifier
+        | (?:--|//)[^\r\n]*(?:\r\n|[\r\n])?  # line comment
+        | /\*(?:\*[^/])?[\s\S]*?(?:\*/|\Z)  # block/formal comment
+        | \?                            # qmark placeholder
+        """,
+        re.VERBOSE,
+    )
+
+    @classmethod
+    def substitute_in_query(cls, string_query, parameters):
+        """Substitute qmark parameters without reparsing parameter contents.
+
+        Drill's REST endpoint accepts SQL text rather than a separate parameter
+        payload, so the DB-API driver must render literals locally.  Placeholders
+        inside SQL strings, quoted identifiers, or comments are not parameters,
+        and question marks introduced by a parameter are never visited again.
+        """
+        logger.info(f'substitutes parameters in query {string_query}.')
+        if isinstance(parameters, (dict, str, bytes)):
+            raise ProgrammingError(
+                'qmark parameters must be supplied as a sequence', None
+            )
+        if parameters is None:
+            parameters = ()
+
+        try:
+            parameters = tuple(parameters)
+        except TypeError as error:
+            raise ProgrammingError(
+                'qmark parameters must be supplied as a sequence', None
+            ) from error
+        output = []
+        parameter_index = 0
+        position = 0
+
+        for match in cls._TOKEN_PATTERN.finditer(string_query):
+            output.append(string_query[position:match.start()])
+            token = match.group()
+            if token == '?':
+                if parameter_index >= len(parameters):
+                    raise ProgrammingError(
+                        'Not enough query parameters for qmark placeholders',
+                        None,
+                    )
+                literal = cls._sql_literal(parameters[parameter_index])
+                logger.debug(f'set parameter value {literal}')
+                output.append(literal)
+                parameter_index += 1
+            else:
+                output.append(token)
+            position = match.end()
+
+        output.append(string_query[position:])
+
+        if parameter_index != len(parameters):
+            raise ProgrammingError(
+                'Too many query parameters for qmark placeholders', None
+            )
+        return ''.join(output)
 
     def __init__(self, conn):
 

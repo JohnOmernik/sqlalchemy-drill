@@ -1,6 +1,6 @@
-# This workflow will upload a Python Package to PyPI when a release is created
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
-
+# Builds, verifies and only then uploads a Python package when a release is
+# published.
+#
 # This workflow uses actions that are not certified by GitHub.
 # They are provided by a third-party and are governed by
 # separate terms of service, privacy policy, and support
@@ -16,55 +16,117 @@ permissions:
   contents: read
 
 jobs:
-  release-build:
+  # Every check runs here.  Nothing in this job can publish, and the publish
+  # job below will not start unless this one succeeds.
+  build:
+    name: Build and verify
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: Install build tooling
+      run: |
+        python -m pip install --upgrade pip
+        pip install setuptools build twine pytest
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
+    - name: Resolve the declared version
+      id: version
+      run: |
+        version="$(python setup.py --version)"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "declared version: $version"
 
-      - name: Build release distributions
-        run: |
-          # NOTE: put your own distribution build steps here.
-          python -m pip install build
-          python -m build
+    # Publishing a tag whose name disagrees with the packaged version puts an
+    # artifact on PyPI that no tag reproduces.  Release tags carry a "v".
+    - name: Check the release tag matches the packaged version
+      env:
+        RELEASE_TAG: ${{ github.event.release.tag_name }}
+      run: |
+        tag="$RELEASE_TAG"
+        expected="v${{ steps.version.outputs.version }}"
+        if [ "$tag" != "$expected" ]; then
+          echo "::error::release tag '$tag' does not match packaged version '$expected'"
+          exit 1
+        fi
+        echo "tag $tag matches the packaged version"
 
-      - name: Upload distributions
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-dists
-          path: dist/
+    - name: Test artifact validation failures
+      run: python -m pytest -q tools/test_check_dist.py
+
+    - name: Build wheel and sdist
+      run: python -m build
+
+    - name: Check artifact metadata
+      run: python -m twine check --strict dist/*
+
+    - name: Check artifact contents
+      run: |
+        python tools/check_dist.py dist \
+          --expected-version "${{ steps.version.outputs.version }}"
+
+    - name: Install the built wheel into a clean environment
+      run: |
+        python -m venv /tmp/wheel-env
+        /tmp/wheel-env/bin/pip install --upgrade pip
+        /tmp/wheel-env/bin/pip install dist/*.whl pytest
+        mkdir -p /tmp/outside
+        cp test/test_sqlalchemy2_reflection.py /tmp/outside/
+
+    - name: Verify the installed wheel
+      working-directory: /tmp/outside
+      run: |
+        /tmp/wheel-env/bin/python - <<'EOF'
+        import sqlalchemy_drill
+        import importlib.util
+        spec = importlib.util.find_spec("test")
+        assert spec is None or "site-packages" not in (spec.origin or ""), spec
+        print("installed", sqlalchemy_drill.__version__)
+        EOF
+        /tmp/wheel-env/bin/python -m pytest -q test_sqlalchemy2_reflection.py
+
+    - name: Install the built sdist into a clean environment
+      run: |
+        python -m venv /tmp/sdist-env
+        /tmp/sdist-env/bin/pip install --upgrade pip
+        /tmp/sdist-env/bin/pip install dist/*.tar.gz pytest
+
+    - name: Verify the installed sdist
+      working-directory: /tmp/outside
+      run: |
+        /tmp/sdist-env/bin/python -c "import sqlalchemy_drill; print(sqlalchemy_drill.__version__)"
+        /tmp/sdist-env/bin/python -m pytest -v test_sqlalchemy2_reflection.py
+
+    # Hand the verified artifacts to the publish job rather than rebuilding
+    # them there, so exactly what was checked is what gets uploaded.
+    - name: Upload verified artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: |
+          dist/sqlalchemy_drill-${{ steps.version.outputs.version }}-py3-none-any.whl
+          dist/sqlalchemy_drill-${{ steps.version.outputs.version }}.tar.gz
+        if-no-files-found: error
 
   pypi-publish:
+    name: Publish to PyPI
+    needs: build
     runs-on: ubuntu-latest
-    needs:
-      - release-build
     permissions:
-      # IMPORTANT: this permission is mandatory for trusted publishing
       id-token: write
-
-    # Dedicated environments with protections for publishing are strongly recommended.
-    # For more information, see: https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment#deployment-protection-rules
-    environment:
-      name: pypi
-      # OPTIONAL: uncomment and update to include your PyPI project URL in the deployment status:
-      # url: https://pypi.org/p/YOURPROJECT
-      #
-      # ALTERNATIVE: if your GitHub Release name is the PyPI project version string
-      # ALTERNATIVE: exactly, uncomment the following line instead:
-      # url: https://pypi.org/project/YOURPROJECT/${{ github.event.release.name }}
+    environment: pypi
 
     steps:
-      - name: Retrieve release distributions
-        uses: actions/download-artifact@v4
-        with:
-          name: release-dists
-          path: dist/
+    - name: Download verified artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: dist
+        path: dist/
 
-      - name: Publish release distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/
+    - name: Publish package
+      uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # release/v1, 2026-07-28
+      with:
+        packages-dir: dist/

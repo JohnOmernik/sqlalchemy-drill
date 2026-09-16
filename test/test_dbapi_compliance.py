@@ -19,6 +19,8 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+from unittest.mock import patch
+
 import pytest
 
 from sqlalchemy_drill.drilldbapi import _drilldbapi
@@ -113,18 +115,19 @@ class DrillTest(dbapi20.DatabaseAPI20Test):
         con = self._connect()
         try:
             cur = con.cursor()
-            cur.executemany(
-                f"create table `{self.table_prefix}_executemany/?_squared` as select ? * ? as product",
-                [(i, i, i) for i in range(1, 4)],
-            )
+            parameter_sets = [(i, i) for i in range(1, 4)]
+            # Run real queries and prove every parameter set was executed;
+            # checking only the final result permits a last-call-only bug.
+            with patch.object(cur, "execute", wraps=cur.execute) as execute:
+                cur.executemany("select ? * ? as product", parameter_sets)
+                self.assertEqual(
+                    [call.args for call in execute.call_args_list],
+                    [("select ? * ? as product", pair) for pair in parameter_sets],
+                )
 
-            cur.execute(
-                f"select product from {self.table_prefix}_executemany order by product"
-            )
             res = cur.fetchall()
-            self.assertEqual([(1,), (4,), (9,)], res)
+            self.assertEqual([(9,)], res)
         finally:
-            cur.execute(f"drop table if exists {self.table_prefix}_executemany")
             con.close()
 
     @pytest.mark.skip("Not implemented")

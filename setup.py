@@ -10,26 +10,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import sys
 import io
+import re
 from os import path
 from setuptools import setup, find_packages
 
-v = open(os.path.join(
-    os.path.dirname(os.path.realpath(sys.argv[0])),
-    'sqlalchemy_drill',
-    '__init__.py')
-)
-v.close()
-
-
 this_directory = path.abspath(path.dirname(__file__))
+
+
+def read_version():
+    """Read __version__ from the package without importing it.
+
+    sqlalchemy_drill/__init__.py registers dialects with SQLAlchemy on import,
+    so it cannot be imported before dependencies are installed.  The package is
+    the single source of truth for the version; setup.py must not carry a
+    second copy that can drift.
+    """
+    init_path = path.join(this_directory, 'sqlalchemy_drill', '__init__.py')
+    with io.open(init_path, encoding='utf-8') as handle:
+        for line in handle:
+            match = re.match(
+                r"""^__version__\s*=\s*['"]([^'"]+)['"]""", line)
+            if match:
+                return match.group(1)
+    raise RuntimeError(f'no __version__ found in {init_path}')
+
+
+VERSION = read_version()
+
 with io.open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(name='sqlalchemy_drill',
-      version='1.1.10',
+      version=VERSION,
       description="Apache Drill for SQLAlchemy",
       long_description=long_description,
       long_description_content_type="text/markdown",
@@ -50,7 +63,7 @@ setup(name='sqlalchemy_drill',
       install_requires=[
           "requests",
           "ijson",
-          "sqlalchemy"
+          "sqlalchemy>=1.4"
       ],
       extras_require={
           "jdbc": ["JPype1", "JayDeBeApi"],
@@ -63,12 +76,17 @@ setup(name='sqlalchemy_drill',
       '@gmail.com, massimo.martiradonna.dap@gmail.com, james@somecomputer.xyz',
       license='MIT',
       url='https://github.com/JohnOmernik/sqlalchemy-drill',
+      # Release tags carry a "v" prefix, so archive/<version>.tar.gz is a 404.
       download_url='https://github.com/JohnOmernik/sqlalchemy-drill/archive/'
-      '1.1.10.tar.gz',
-      packages=find_packages(),
+      f'refs/tags/v{VERSION}.tar.gz',
+      # "test" is a top-level directory with an __init__.py, so an unfiltered
+      # find_packages() shipped it in the wheel, where it installed as a
+      # top-level "test" package and shadowed CPython's stdlib test package.
+      packages=find_packages(exclude=['test', 'test.*']),
       include_package_data=True,
-      tests_require=['nose >= 0.11'],
-      test_suite="nose.collector",
+      # tests_require/test_suite removed: setuptools dropped both, so they only
+      # produced "Unknown distribution option" warnings on every invocation --
+      # including "setup.py --version", which the packaging gate parses.
       zip_safe=False,
       entry_points={
           'sqlalchemy.dialects': [

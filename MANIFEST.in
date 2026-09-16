@@ -1,13 +1,29 @@
-# any kind of "*" pulls in __init__.pyc files,
-# so all extensions are explicit.
+# Controls the sdist only.  The wheel's contents come from the "packages"
+# argument in setup.py, which deliberately excludes the test package.
+#
+# The sdist is meant to be self-testing: it carries the test suite, the Drill
+# fixtures the integration tests mount into the container, and the requirements
+# files that install the test dependencies.
 
-recursive-include doc *.html *.css *.txt *.js *.jpg *.png *.py Makefile *.rst *.mako *.sty
-recursive-include examples *.py *.xml
-recursive-include test *.py *.dat
+include README.md LICENSE AUTHORS CHANGELOG.md
 
-# include the c extensions, which otherwise
-# don't come in if --with-cextensions isn't specified.
-recursive-include lib *.c *.txt
+# Test dependencies, referenced by the CI workflows as
+# "pip install -r requirements/test.txt".
+recursive-include requirements *.txt
 
-include README* LICENSE distribute_setup.py sa2to3.py ez_setup.py sqla_nose.py CHANGES*
-prune doc/build/output
+# Test suite plus the non-Python fixtures it needs.  drill-override.conf and
+# htpasswd are mounted into the pinned Apache Drill container by
+# test/conftest.py; test_odbc.ini is the ODBC DSN fixture.
+recursive-include test *.py
+include test/drill-override.conf
+include test/htpasswd
+include test/test_odbc.ini
+
+# Artifact verification, so a downloaded sdist can be checked the same way CI
+# checks a freshly built one.
+recursive-include tools *.py
+
+# Apache Ivy descriptor and helper used to fetch the Drill JDBC jars that
+# test/test_jars.py and test/test_jdbc.py load from lib/.
+include ivy.xml
+include resolve.sh

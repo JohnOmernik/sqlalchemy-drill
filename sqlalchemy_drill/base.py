@@ -24,10 +24,10 @@ from __future__ import unicode_literals
 import logging
 from urllib.parse import unquote
 
-from sqlalchemy import exc, pool, types
-from sqlalchemy.engine import default
+from sqlalchemy import exc, inspect, pool, text, types
+from sqlalchemy.engine import default, reflection
 from sqlalchemy.sql import compiler
-from sqlalchemy import inspect
+from sqlalchemy.sql.elements import quoted_name
 
 logger = logging.getLogger('drilldbapi')
 
@@ -80,20 +80,35 @@ class DrillCompiler_sadrill(compiler.SQLCompiler):
     def visit_char_length_func(self, fn, **kw):
         return f'length{self.function_argspec(fn, **kw)}'
 
-    def visit_table(self, table, asfrom=False, **kwargs):
-        logger.debug(f"table: {table}")
-        if asfrom:
-            try:
-                fixed_schema = ""
-                if table.schema != "":
-                    fixed_schema = ".".join(
-                        [f"`{i.replace('`', '')}`" for i in table.schema.split(".")])
-                fixed_table = f"{fixed_schema}.`{table.name.replace('`', '')}`"
-                return fixed_table
-            except Exception as ex:
-                logger.error(f"Error in DrillCompiler_sadrill.visit_table :: {ex}")
-                return ""
-        return ""
+    def visit_column(self, column, add_to_result_map=None, include_table=True,
+                     **kw):
+        """Render a column reference without a schema qualifier.
+
+        SQLAlchemy prefixes a column with ``schema.table.``, but Drill only
+        accepts a one-part table qualifier: ``SELECT cp.`employee.json`.x FROM
+        cp.`employee.json``` fails validation while ``SELECT `employee.json`.x
+        FROM cp.`employee.json``` succeeds.  Strip exactly the prefix
+        SQLAlchemy added, leaving the table qualifier (needed to disambiguate
+        joins) intact.
+        """
+        text = super().visit_column(
+            column,
+            add_to_result_map=add_to_result_map,
+            include_table=include_table,
+            **kw
+        )
+        table = column.table
+        if not include_table or table is None:
+            return text
+
+        schema = self.preparer.schema_for_object(table)
+        if not schema:
+            return text
+
+        schema_prefix = f'{self.preparer.quote_schema(schema)}.'
+        if text.startswith(schema_prefix):
+            return text[len(schema_prefix):]
+        return text
 
     def visit_tablesample(self, tablesample, asfrom=False, **kw):
         logger.info(f"{tablesample}")
@@ -159,38 +174,68 @@ class DrillIdentifierPreparer(compiler.IdentifierPreparer):
     )
 
     def __init__(self, dialect):
-        super().__init__(dialect, initial_quote='`', final_quote='`')
+        super().__init__(
+            dialect,
+            initial_quote='`',
+            final_quote='`',
+            escape_quote='`',
+        )
 
-    def format_drill_table(self, schema, isFile=True):
-        formatted_schema = ""
+    @staticmethod
+    def _schema_parts(schema):
+        """Return Drill's plugin/workspace path as distinct identifiers."""
+        if schema is None or str(schema) == "":
+            return ()
 
-        num_dots = schema.count(".")
-        schema = schema.replace('`', '')
+        # Translation tokens carry the *source* schema as an opaque map key.
+        # In particular, rewriting a slash here changes which schema is selected.
+        if (isinstance(schema, quoted_name) and schema.quote is False
+                and schema.startswith("__[SCHEMA_") and schema.endswith("]")):
+            return (schema,)
 
-        # For a file, the last section will be the file extension
-        schema_parts = schema.split('.')
+        # SQLAlchemy URLs commonly spell ``dfs.tmp`` as ``dfs/tmp``.  Dots and
+        # slashes in a schema therefore delimit Drill's plugin/workspace path;
+        # table names are always passed separately so file extensions remain a
+        # single identifier.
+        parts = str(schema).replace("/", ".").split(".")
+        if any(part == "" for part in parts):
+            raise ValueError("Drill schema paths cannot contain empty components")
+        # SQLAlchemy schema-translation tokens are quoted_name(quote=False).
+        # Keep this contract until the compiler substitutes the actual schema;
+        # otherwise a mapped plugin.workspace becomes one backticked token.
+        quote = getattr(schema, "quote", None)
+        return tuple(quoted_name(part, quote=quote) for part in parts)
 
-        if isFile and num_dots == 3:
-            # Case for File + Workspace
-            plugin = schema_parts[0]
-            workspace = schema_parts[1]
-            table = schema_parts[2] + "." + schema_parts[3]
-            formatted_schema = plugin + ".`" + workspace + "`.`" + table + "`"
-        elif isFile and num_dots == 2:
-            # Case for file and no workspace
-            plugin = schema_parts[0]
-            formatted_schema = plugin + "." + \
-                schema_parts[1] + ".`" + schema_parts[2] + "`"
-        else:
-            # Case for non-file plugins or incomplete schema parts
-            for part in schema_parts:
-                quoted_part = "`" + part + "`"
-                if len(formatted_schema) > 0:
-                    formatted_schema += "." + quoted_part
-                else:
-                    formatted_schema = quoted_part
+    def quote_schema(self, schema, force=None):
+        """Quote each component of a qualified Drill schema independently."""
+        # ``force`` has had no effect in SQLAlchemy since 0.9 and is absent
+        # from the current 2.1 signature.  Accept it only for call compatibility.
+        return ".".join(self.quote(part) for part in self._schema_parts(schema))
 
-        return formatted_schema
+    def format_drill_schema(self, schema):
+        """Format a plugin/workspace path for an identifier-only SQL clause."""
+        return self.quote_schema(schema)
+
+    def format_drill_table(self, schema, table_name):
+        """Format a Drill table without confusing file extensions for schemas.
+
+        Schema and table must be passed separately.  The old single-string
+        ``format_drill_table(path, isFile=...)`` signature is gone rather than
+        shimmed: silently accepting it produced wrong identifiers such as
+        ``dfs.tmp.f.csv.`False``` instead of raising.  Use
+        :meth:`format_drill_schema` to format a schema on its own.
+        """
+        if not isinstance(table_name, str):
+            raise TypeError(
+                "format_drill_table() requires a string table name; the "
+                "legacy isFile argument is no longer supported"
+            )
+
+        schema_name = self.format_drill_schema(schema)
+        quoted_table = self.quote(table_name)
+        if schema_name:
+            return f"{schema_name}.{quoted_table}"
+        return quoted_table
 
 
 class DrillDialect(default.DefaultDialect):
@@ -209,6 +254,7 @@ class DrillDialect(default.DefaultDialect):
     returns_unicode_strings = True
     description_encoding = None
     supports_native_boolean = True
+    supports_statement_cache = True
 
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -290,20 +336,23 @@ class DrillDialect(default.DefaultDialect):
         """Drill has no support for primary keys.  Retunrs an empty list."""
         return []
 
+    @staticmethod
+    def _schema_name(connection, schema):
+        """Resolve a reflection schema and normalize Drill URL path syntax."""
+        if schema is None:
+            schema = connection.engine.url.database
+        if schema is None:
+            return None
+        return str(schema).replace("/", ".")
+
+    @reflection.cache
     def get_schema_names(self, connection, **kw):
-        # Get table information
-        query = "SHOW DATABASES"
-
-        curs = connection.execute(query)
-        result = []
-        try:
-            for row in curs:
-                if row.SCHEMA_NAME not in ('cp.default', 'INFORMATION_SCHEMA', 'dfs.default'):
-                    result.append(row.SCHEMA_NAME)
-        except Exception as ex:
-            logger.error(f"Error in DrillDialect_sadrill.get_schema_names :: {ex}")
-
-        return tuple(result)
+        curs = connection.execute(text("SHOW DATABASES"))
+        return tuple(
+            row[0]
+            for row in curs
+            if row[0] not in ('cp.default', 'INFORMATION_SCHEMA', 'dfs.default')
+        )
 
     def get_selected_workspace(self):
         logger.info(f"Selected Workspace: {self.workspace}")
@@ -313,73 +362,97 @@ class DrillDialect(default.DefaultDialect):
         logger.info(f"Storage Plugin: {self.storage_plugin}")
         return self.storage_plugin
 
+    @reflection.cache
     def get_table_names(self, connection, schema=None, **kw):
-        if schema is None:
-            schema = connection.engine.url.database
-        # Clean up schema
-
-        quoted_schema = self.identifier_preparer.format_drill_table(schema)
-        quoted_schema = quoted_schema.replace("/", ".")
-
-        # https://docs.sqlalchemy.org/en/latest/core/connections.html#translation-of-schema-names
-        plugin_type = self.get_plugin_type(connection, quoted_schema)
-
-        self.plugin_type = plugin_type
-        self.quoted_schema = quoted_schema
+        schema = self._schema_name(connection, schema)
+        plugin_type = self.get_plugin_type(
+            connection, schema, info_cache=kw.get("info_cache"))
 
         if plugin_type == 'file':
-            curs = connection.execute("SHOW FILES FROM " + quoted_schema)
-            tables_names = []
-            try:
-                for row in curs:
-                    if row.name.find(".view.drill") >= 0:
-                        # Exclude views
-                        continue
-                    myname = row.name
-                    tables_names.append(myname)
-
-            except Exception as ex:
-                logger.error(f"Error in DrillDialect_sadrill.get_table_names :: {ex}")
-
-            return tuple(tables_names)
+            quoted_schema = self.identifier_preparer.format_drill_schema(schema)
+            curs = connection.exec_driver_sql(f"SHOW FILES FROM {quoted_schema}")
+            return tuple(
+                row[0]
+                for row in curs
+                if ".view.drill" not in row[0]
+            )
 
         curs = connection.execute(
-            f"SELECT `TABLE_NAME` AS name FROM INFORMATION_SCHEMA.`TABLES` WHERE `TABLE_SCHEMA` = '{schema}'")
-        tables_names = []
-        try:
-            for row in curs:
-                if row.name.find(".view.drill") >= 0:
-                    myname = row.name.replace(".view.drill", "")
-                else:
-                    myname = row.name
-                tables_names.append(myname)
+            text(
+                "SELECT `TABLE_NAME` AS name "
+                "FROM INFORMATION_SCHEMA.`TABLES` "
+                "WHERE `TABLE_SCHEMA` = :schema"
+            ),
+            {"schema": schema},
+        )
+        return tuple(
+            row[0].replace(".view.drill", "")
+            if ".view.drill" in row[0] else row[0]
+            for row in curs
+        )
 
-        except Exception as ex:
-            logger.error(f"Error in DrillDialect_sadrill.get_table_names :: {ex}")
-
-        return tuple(tables_names)
-
+    @reflection.cache
     def get_view_names(self, connection, schema=None, **kw):
-        view_names = []
+        schema = self._schema_name(connection, schema)
         curs = connection.execute(
-            f"SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.views WHERE table_schema='{schema}'")
+            text(
+                "SELECT `TABLE_NAME` "
+                "FROM INFORMATION_SCHEMA.`VIEWS` "
+                "WHERE `TABLE_SCHEMA` = :schema"
+            ),
+            {"schema": schema},
+        )
+        return tuple(row[0] for row in curs)
+
+    @reflection.cache
+    def has_table(self, connection, table_name, schema=None, **kwargs):
+        schema = self._schema_name(connection, schema)
+        curs = connection.execute(
+            text(
+                "SELECT 1 FROM INFORMATION_SCHEMA.`TABLES` "
+                "WHERE `TABLE_SCHEMA` = :schema "
+                "AND `TABLE_NAME` = :table_name LIMIT 1"
+            ),
+            {"schema": schema, "table_name": table_name},
+        )
         try:
-            for row in curs:
-                myname = row.TABLE_NAME
-                view_names.append(myname)
-
-        except Exception as ex:
-            logger.error(f"Error in DrillDialect_sadrill.get_view_names :: {ex}")
-
-        return tuple(view_names)
-
-    def has_table(self, connection, table_name, schema=None, **kwargs) -> bool:
-        try:
-            self.get_columns(connection, table_name, schema)
+            # LIMIT 1 bounds this read. first() closes without checking the
+            # trailing REST queryState, which may report an opaque failure.
+            rows = curs.fetchall()
+        finally:
+            curs.close()
+        if rows:
             return True
-        except exc.NoSuchTableError as e:
-            logger.error(f"Error in DrillDialect_sadrill.has_table :: {e}")
-            return False
+
+        # File-backed tables are discovered through SHOW FILES rather than
+        # INFORMATION_SCHEMA.TABLES.  Compare names in Python so that the file
+        # name never becomes executable SQL.
+        info_cache = kwargs.get("info_cache")
+        if self.get_plugin_type(
+                connection, schema, info_cache=info_cache) == 'file':
+            if (
+                table_name in self.get_table_names(
+                    connection, schema, info_cache=info_cache)
+                or table_name in self.get_view_names(
+                    connection, schema, info_cache=info_cache)
+            ):
+                return True
+
+            # Classpath resources (notably cp.default) are queryable but are
+            # not returned by SHOW FILES.  Probe them through the same quoted
+            # identifier path used for dynamic column reflection.  A DBAPI
+            # failure cannot distinguish absence from permission/server errors
+            # when Drill suppresses error details, so DBAPI failures propagate.
+            try:
+                return bool(self.get_columns(
+                    connection,
+                    table_name,
+                    schema,
+                    info_cache=info_cache,
+                ))
+            except exc.NoSuchTableError:
+                return False
+        return False
 
     def _check_unicode_returns(self, connection, additional_tests=None):
         # requests gives back Unicode strings
@@ -402,32 +475,42 @@ class DrillDialect(default.DefaultDialect):
             logger.warning(f"Unknown Drill data type: '{data_type}', using UserDefinedType")
             return types.UserDefinedType
 
+    @reflection.cache
     def get_columns(self, connection, table_name, schema=None, **kw):
         result = []
-
-        plugin_type = self.get_plugin_type(connection, schema)
+        info_cache = kw.get("info_cache")
+        schema = self._schema_name(connection, schema)
+        plugin_type = self.get_plugin_type(
+            connection, schema, info_cache=info_cache)
 
         # Plugins with dynamic schemas use ** notation - query data directly
         if plugin_type in ('file', 'mongo', 'splunk'):
-            views = self.get_view_names(connection, schema)
-
-            file_name = schema + "." + table_name
             quoted_file_name = self.identifier_preparer.format_drill_table(
-                file_name, isFile=True)
+                schema, table_name)
 
-            # MongoDB and Splunk use ** notation - query data directly to get schema
+            # MongoDB uses ** notation - query data directly to get schema.
+            # Views and plain files are both read with SELECT *, so no
+            # get_view_names() round trip is needed to choose between them.
             if plugin_type == "mongo":
-                mongo_quoted_file_name = self.identifier_preparer.format_drill_table(
-                    file_name, isFile=False)
-                q = f"SELECT `**` FROM {mongo_quoted_file_name} LIMIT 1"
-            elif table_name in views:
-                logger.debug(f"View: {quoted_file_name}, {table_name}, {schema}")
-                view_name = f"`{schema}`.`{table_name}`"
-                q = f"SELECT * FROM {view_name} LIMIT 1"
+                q = f"SELECT `**` FROM {quoted_file_name} LIMIT 1"
             else:
                 q = f"SELECT * FROM {quoted_file_name} LIMIT 1"
 
-            column_metadata = connection.execute(q).cursor.description
+            # This SQL contains identifiers, not literal values.  Using
+            # exec_driver_sql avoids text() treating a colon inside a quoted
+            # identifier as a bind marker.
+            # Drill may omit error details, so a failed SELECT cannot prove
+            # absence. Keep permission, syntax, server and connection errors
+            # visible instead of misclassifying them as NoSuchTableError.
+            curs = connection.exec_driver_sql(q)
+            try:
+                column_metadata = curs.cursor.description
+                # Metadata precedes rows and final queryState in REST results.
+                # Exhaust this LIMIT 1 probe through SQLAlchemy so trailing
+                # DBAPI errors are wrapped, and never cache failed reflection.
+                curs.fetchall()
+            finally:
+                curs.close()
 
             for row in column_metadata:
                 # row[1] is a DBAPITypeObject - extract the type name from its values
@@ -450,44 +533,71 @@ class DrillDialect(default.DefaultDialect):
             logger.debug(f"GET COLUMN QUERY RESULTS: {result}")
             return result
 
-        if "SELECT " in table_name:
-            q = f"SELECT * FROM ({table_name}) LIMIT 1"
-        else:
-            quoted_schema = self.identifier_preparer.format_drill_table(
-                schema + "." + table_name, isFile=False)
-            q = f"DESCRIBE {quoted_schema}"
-        logger.debug(f"QUERY: {q}")
-        query_results = connection.execute(q)
+        # INFORMATION_SCHEMA values are literals, so both schema and table are
+        # bound.  In particular, table_name is never accepted as an arbitrary
+        # SELECT expression during reflection.
+        query_results = connection.execute(
+            text(
+                "SELECT `COLUMN_NAME`, `DATA_TYPE`, `IS_NULLABLE` "
+                "FROM INFORMATION_SCHEMA.`COLUMNS` "
+                "WHERE `TABLE_SCHEMA` = :schema "
+                "AND `TABLE_NAME` = :table_name "
+                "ORDER BY `ORDINAL_POSITION`"
+            ),
+            {"schema": schema, "table_name": table_name},
+        )
 
         for row in query_results:
             logger.debug(f"Getting (1) data type: {row[1].lower()}")
-
+            drill_data_type = self.get_data_type(str(row[1]).lower())
             column = {
                 "name": row[0],
-                "type": self.get_data_type(str(row[1]).lower()),
-                "longType": self.get_data_type(str(row[1]).lower())
+                "type": drill_data_type,
+                "longType": drill_data_type,
+                "nullable": str(row[2]).upper() == "YES",
             }
             result.append(column)
+        if not result:
+            raise exc.NoSuchTableError(
+                f"{schema + '.' if schema else ''}{table_name}"
+            )
         logger.debug(f"Result: {result}")
         return result
 
-    def get_plugin_type(self, connection, plugin=None):
+    @reflection.cache
+    def get_plugin_type(self, connection, plugin=None, **kw):
+        """Resolve a schema path to its Drill storage plugin type.
+
+        INFORMATION_SCHEMA.SCHEMATA only lists fully qualified workspaces, so
+        an exact match alone cannot resolve a bare plugin name: on Drill
+        1.21.2 ``SCHEMA_NAME = 'dfs'`` returns nothing even though ``dfs.tmp``,
+        ``dfs.root`` and ``dfs.default`` all exist.  Match the plugin itself or
+        any workspace beneath it, preferring an exact hit.  Both values stay
+        bound; the LIKE pattern escapes ``%``, ``_`` and the escape character
+        so a schema name cannot smuggle in wildcards.
+        """
         if plugin is None:
             return None
 
-        try:
-            query = f"""SELECT SCHEMA_NAME, TYPE
-            FROM INFORMATION_SCHEMA.`SCHEMATA`
-            WHERE SCHEMA_NAME LIKE '%{plugin.replace('`', '')}%'"""
-
-            rows = connection.execute(query).fetchall()
-            plugin_type = ""
-            for row in rows:
-                plugin_type = row[1]
-                # plugin_name = row[0]  # unused
-
-            return plugin_type
-
-        except Exception as ex:
-            logger.error(f"Error in DrillDialect_sadrill.get_plugin_type :: {ex}")
+        plugin = str(plugin).replace("/", ".")
+        pattern = (
+            plugin.replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        ) + ".%"
+        rows = connection.execute(
+            text(
+                "SELECT `SCHEMA_NAME`, `TYPE` "
+                "FROM INFORMATION_SCHEMA.`SCHEMATA` "
+                "WHERE `SCHEMA_NAME` = :plugin "
+                "OR `SCHEMA_NAME` LIKE :pattern ESCAPE '\\' "
+                "ORDER BY `SCHEMA_NAME`"
+            ),
+            {"plugin": plugin, "pattern": pattern},
+        ).fetchall()
+        if not rows:
             return None
+        for row in rows:
+            if row[0] == plugin:
+                return str(row[1]).lower()
+        return str(rows[0][1]).lower()

@@ -1,4 +1,4 @@
 ijson~=3.3.0
-sqlalchemy
+sqlalchemy>=1.4
 JayDeBeApi
 pyodbc

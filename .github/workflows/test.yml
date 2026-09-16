@@ -1,10 +1,12 @@
-# This workflow will upload a Python Package using Twine when a release is created
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
-
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
+# This workflow runs the sqlalchemy-drill test suite.
+#
+# It has two jobs:
+#   * "unit" runs the SQLAlchemy compilation/reflection regressions against
+#     several SQLAlchemy releases.  These need no Drill server.
+#   * "integration" runs the DB-API compliance suite and the live reflection
+#     tests against a pinned Apache Drill, started from the test fixtures via
+#     testcontainers.  Those tests skip unless DRILL_RUN_REST_INTEGRATION=1,
+#     so it is set here.
 
 name: Run test suite
 
@@ -14,18 +16,156 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  unit:
+    name: Unit tests (SQLAlchemy ${{ matrix.sqlalchemy }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sqlalchemy: "1.4.54"
+            pip-spec: "SQLAlchemy==1.4.54"
+          - sqlalchemy: "2.0.52"
+            pip-spec: "SQLAlchemy==2.0.52"
+          - sqlalchemy: "2.1 prerelease"
+            pip-spec: "SQLAlchemy==2.1.0rc1"
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements/test.txt
+        pip install ${{ matrix.pip-spec }}
+    - name: Show resolved SQLAlchemy version
+      run: python -c "import sqlalchemy; print(sqlalchemy.__version__)"
+    # These assertions run on every push.  They must not be folded into the
+    # integration job, whose tests all skip when no Drill server is available.
+    - name: Run SQLAlchemy compilation and reflection regressions
+      run: python -m pytest -v test/test_sqlalchemy2_reflection.py tools/test_check_dist.py
+
+  integration:
+    name: Apache Drill REST integration
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.x'
+        python-version: '3.11'
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements/test.txt
-    - name: Run pytest
-      run: python -m pytest -vs test/test_dbapi_compliance.py test/test_sadrill.py
+    # conftest.py starts apache/drill:1.21.2 (pinned by digest) through
+    # testcontainers.  Without this variable every test below skips and the
+    # job would pass without executing a single assertion.
+    - name: Run tests against Apache Drill
+      env:
+        DRILL_RUN_REST_INTEGRATION: "1"
+    # With the variable set, the drill_container fixture raises instead of
+    # skipping if it cannot start Drill, so this job cannot go green without
+    # having executed the integration assertions.
+      run: |
+        python -m pytest -v \
+          test/test_dbapi_compliance.py \
+          test/test_sadrill.py \
+          test/test_sqlalchemy2_reflection.py
+
+  package:
+    name: Build and verify distribution artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: Install build tooling
+      run: |
+        python -m pip install --upgrade pip
+        pip install setuptools build twine pytest
+
+    - name: Test artifact validation failures
+      run: python -m pytest -q tools/test_check_dist.py
+
+    - name: Build wheel and sdist
+      run: python -m build
+
+    # The package is the single source of truth for the version.  Reading it
+    # here without importing keeps the gate honest even if the build is broken.
+    - name: Resolve the declared version
+      id: version
+      run: |
+        version="$(python setup.py --version)"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "declared version: $version"
+
+    - name: Check artifact metadata
+      run: python -m twine check --strict dist/*
+
+    # Rejects a version mismatch between the package and the artifacts, and
+    # any wheel that ships the top-level test package.
+    - name: Check artifact contents
+      run: |
+        python tools/check_dist.py dist \
+          --expected-version "${{ steps.version.outputs.version }}"
+        echo "--- wheel contents ---"
+        python -m zipfile -l dist/*.whl
+        echo "--- sdist contents ---"
+        python -m tarfile -l dist/*.tar.gz
+
+    # Install the built wheel, not the checkout, and exercise it from a
+    # directory that contains no source tree so nothing can be imported
+    # locally by accident.
+    - name: Install the built wheel into a clean environment
+      run: |
+        python -m venv /tmp/wheel-env
+        /tmp/wheel-env/bin/pip install --upgrade pip
+        /tmp/wheel-env/bin/pip install dist/*.whl pytest
+        mkdir -p /tmp/outside
+        cp test/test_sqlalchemy2_reflection.py /tmp/outside/
+
+    - name: Verify the installed wheel
+      working-directory: /tmp/outside
+      run: |
+        /tmp/wheel-env/bin/python - <<'EOF'
+        import sqlalchemy_drill
+        import importlib.util
+        spec = importlib.util.find_spec("test")
+        from sqlalchemy_drill.sadrill import DrillDialect_sadrill
+        print("installed:", sqlalchemy_drill.__file__)
+        print("version  :", sqlalchemy_drill.__version__)
+        # The wheel used to ship a top-level "test" package that replaced the
+        # standard library's.
+        assert spec is None or "site-packages" not in (spec.origin or ""), spec
+        print("stdlib test package intact")
+        EOF
+        /tmp/wheel-env/bin/python -m pytest -v test_sqlalchemy2_reflection.py
+
+    - name: Install the built sdist into a clean environment
+      run: |
+        python -m venv /tmp/sdist-env
+        /tmp/sdist-env/bin/pip install --upgrade pip
+        /tmp/sdist-env/bin/pip install dist/*.tar.gz pytest
+
+    - name: Verify the installed sdist
+      working-directory: /tmp/outside
+      run: |
+        /tmp/sdist-env/bin/python -c "import sqlalchemy_drill; print(sqlalchemy_drill.__version__)"
+        /tmp/sdist-env/bin/python -m pytest -v test_sqlalchemy2_reflection.py
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-${{ steps.version.outputs.version }}
+        path: |
+          dist/sqlalchemy_drill-${{ steps.version.outputs.version }}-py3-none-any.whl
+          dist/sqlalchemy_drill-${{ steps.version.outputs.version }}.tar.gz
+        if-no-files-found: error
