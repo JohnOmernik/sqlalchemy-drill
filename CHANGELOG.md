@@ -1,3 +1,17 @@
+## [1.1.11.7] - unreleased
+
+### Fixed
+
+- REST fetches of repeated FLOAT4/FLOAT8 columns no longer call `float()` on
+  a list. Array elements (including nested arrays) are converted individually;
+  nulls are preserved and maps pass through unchanged. This fixes the
+  array-of-float regression introduced in 1.1.11.6.
+- Clarify that the 1.1.11.6 FLOAT conversion requires Drill 1.19 or later,
+  whose REST metadata precedes the rows.
+
+The existing 1.1.11.6 wheel is immutable and still contains the array defect;
+this fix requires a new release rather than replacement of that artifact.
+
 ## [1.1.11.6] - unreleased
 
 ### Fixed
@@ -5,7 +19,9 @@
 - REST results decoded DOUBLE and FLOAT columns as `Decimal`, and NaN,
   Infinity and -Infinity as the strings `'NaN'`, `'Infinity'` and
   `'-Infinity'`, although the cursor description reports FLOAT. FLOAT4 and
-  FLOAT8 values are now Python floats (or `None`).
+  FLOAT8 values are now Python floats (or `None`) on Drill 1.19 and later.
+  On older Drill servers, REST metadata follows the rows and the typecaster
+  cannot run; the original JSON-decoded values are retained.
 - Reflection of DECIMAL columns in file-backed tables (for example Parquet)
   returned `UserDefinedType`, because Drill reports them as
   `VARDECIMAL(p, s)`. They now reflect as `DECIMAL(p, s)`, and the REST

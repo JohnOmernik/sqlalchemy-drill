@@ -75,6 +75,7 @@ jobs:
         python -m pytest -v \
           test/test_dbapi_compliance.py \
           test/test_sadrill.py \
+          test/test_repeated_float_live.py \
           test/test_sqlalchemy2_reflection.py
 
   package:
