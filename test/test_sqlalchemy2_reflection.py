@@ -1891,3 +1891,62 @@ def test_file_reflection_maps_vardecimal_with_precision_and_scale(streaming_rest
     assert isinstance(amount, sa_types.DECIMAL)
     assert (amount.precision, amount.scale) == (12, 3)
     assert isinstance(ratio, sa_types.FLOAT) and isinstance(n, sa_types.BIGINT)
+
+
+@pytest.mark.parametrize("metadata", ["FLOAT4", "FLOAT8"])
+def test_rest_repeated_float_columns_decode_elements(metadata):
+    import math
+
+    connection = _rest_connection_returning(
+        ["arr"], [metadata],
+        [{"arr": [1.5, 2.5, None, "NaN", "Infinity", "-Infinity"]},
+         {"arr": []}, {"arr": None}, {"arr": [[1.25], [None, -2.5]]}])
+    cursor = connection.cursor()
+    cursor.execute("SELECT arr FROM t")
+    values, empty, null, nested = cursor.fetchall()
+    assert values[0][:3] == [1.5, 2.5, None]
+    assert all(type(value) is float for value in values[0] if value is not None)
+    assert math.isnan(values[0][3])
+    assert values[0][4:] == [math.inf, -math.inf]
+    assert empty == ([],) and null == (None,)
+    assert nested == ([[1.25], [None, -2.5]],)
+    assert type(nested[0][0][0]) is float
+
+
+@pytest.mark.parametrize("metadata", ["FLOAT4", "FLOAT8"])
+def test_rest_float_typecaster_preserves_maps(metadata):
+    from decimal import Decimal
+    from sqlalchemy_drill.drilldbapi._drilldbapi import _float_from_json
+
+    original = {"amount": Decimal("1.25"), "label": "NaN"}
+    assert _float_from_json(original) is original
+    connection = _rest_connection_returning(
+        ["arr"], [metadata], [{"arr": {"amount": 1.25, "label": "NaN"}},
+                            {"arr": [{"amount": 1.25, "label": "NaN"}]}])
+    cursor = connection.cursor()
+    cursor.execute("SELECT arr FROM t")
+    assert cursor.fetchall() == [(original,), ([original],)]
+
+
+def test_rest_trailing_metadata_does_not_claim_float_typecasting(monkeypatch):
+    """Pre-1.19 puts metadata after rows, so the original JSON types remain."""
+    import io
+    import json
+    from decimal import Decimal
+    import requests
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    connection = _rest_connection_returning([], [], [])
+    response = requests.Response()
+    response.status_code = 200
+    # Dict insertion order is significant: metadata follows the rows.
+    response.raw = io.BytesIO(json.dumps({
+        'columns': ['arr'], 'rows': [{'arr': [1.5, 2.5]}],
+        'metadata': ['FLOAT8'], 'queryState': 'COMPLETED',
+    }).encode())
+    monkeypatch.setattr(connection, 'submit_query', lambda *args, **kwargs: response)
+    cursor = connection.cursor()
+    cursor.execute('SELECT arr FROM t')
+    row = cursor.fetchone()
+    assert row == ([Decimal('1.5'), Decimal('2.5')],)
+    assert all(type(item) is Decimal for item in row[0])

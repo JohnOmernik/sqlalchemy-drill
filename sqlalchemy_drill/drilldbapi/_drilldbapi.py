@@ -1090,8 +1090,13 @@ def _float_from_json(value):
 
     Finite values are JSON numbers (parsed as Decimal); Drill writes NaN and
     the infinities as the strings "NaN", "Infinity" and "-Infinity", which
-    float() accepts.
+    float() accepts. Repeated columns use the same metadata as scalars but
+    carry JSON lists. Maps retain their own nested types and are not floats.
     """
+    if isinstance(value, list):
+        return [_float_from_json(item) for item in value]
+    if isinstance(value, dict):
+        return value
     return None if value is None else float(value)
 
 
