@@ -49,6 +49,7 @@ _type_map = {
     'boolean': types.BOOLEAN,
     'date': types.DATE,
     'decimal': types.DECIMAL,
+    'vardecimal': types.DECIMAL,
     'numeric': types.NUMERIC,
     'double': types.FLOAT,
     'float': types.FLOAT,
@@ -763,6 +764,8 @@ class DrillDialect(default.DefaultDialect):
                 data_type = data_type.split('(')[0]
             logger.debug(f"Getting data type: {data_type}")
             drill_data_type = self.get_data_type(data_type)
+            if drill_data_type is types.DECIMAL and row[4] is not None:
+                drill_data_type = types.DECIMAL(row[4], row[5])
             column = {
                 "name": row[0],
                 "type": drill_data_type,

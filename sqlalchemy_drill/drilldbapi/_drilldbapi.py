@@ -273,9 +273,15 @@ class Cursor:
 
         return func_wrapper
 
-    def _gen_description(self, col_types):
+    def _gen_description(self, col_types, raw_col_types=None):
         blank = [None] * len(self.result_md['columns'])
-        dbapi_col_types = [DBAPITypeObject(col_type) for col_type in col_types]
+        dbapi_col_types = [DBAPITypeObject(col_type) for col_type in col_types or ()]
+        # Drill sends DECIMAL columns as e.g. "VARDECIMAL(12, 3)".
+        precision, scale = list(blank), list(blank)
+        for i, raw in enumerate(raw_col_types or ()):
+            sized = _DECIMAL_SIZE.fullmatch(str(raw))
+            if sized:
+                precision[i], scale[i] = int(sized.group(1)), int(sized.group(2))
 
         self.description = tuple(
             zip(
@@ -283,8 +289,8 @@ class Cursor:
                 dbapi_col_types or blank,  # type_code
                 blank,  # display_size
                 blank,  # internal_size
-                blank,  # precision
-                blank,  # scale
+                precision,  # precision
+                scale,  # scale
                 blank   # null_ok
             )
         )
@@ -440,7 +446,7 @@ class Cursor:
             md = self.result_md['metadata']
             # strip size information from column types e.g. VARCHAR(10)
             basic_coltypes = [re.sub(r'\(.*\)', '', m) for m in md]
-            self._gen_description(basic_coltypes)
+            self._gen_description(basic_coltypes, md)
 
             self._typecaster_list = [
                 self.connection.python_typecasters.get(col, lambda v: v) for
@@ -598,15 +604,19 @@ class Connection:
         self.drill_version = resp.json()['rows'][0]['version']
         logger.info(f'has connected to Drill version {self.drill_version}.')
 
-        if self.drill_version < '1.19':
-            self.python_typecasters = {}
-        else:
+        # DOUBLE/FLOAT values arrive as JSON numbers, which the JSON parser
+        # yields as Decimal, and NaN/Infinity/-Infinity arrive as strings.
+        self.python_typecasters = {
+            'FLOAT4': _float_from_json,
+            'FLOAT8': _float_from_json,
+        }
+        if self.drill_version >= '1.19':
             # Starting in 1.19 the Drill REST API returns UNIX times
-            self.python_typecasters = {
+            self.python_typecasters.update({
                 'DATE': DateFromTicks,
                 'TIME': TimeFromTicks,
                 'TIMESTAMP': TimestampFromTicks
-            }
+            })
             logger.debug('sets up typecasting functions for Drill >= 1.19.')
 
     def submit_query(self, query: str, stream: bool = None):
@@ -1069,6 +1079,20 @@ def _datetime_from_epoch_ms(ticks):
     # (1970-01-01, 00:00:00), so only None means NULL. timedelta keeps the
     # millisecond fraction that time.gmtime() would truncate.
     return None if ticks is None else _EPOCH + timedelta(milliseconds=ticks)
+
+
+_DECIMAL_SIZE = re.compile(
+    r'\s*(?:VAR)?DECIMAL\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*', re.IGNORECASE)
+
+
+def _float_from_json(value):
+    """Decode a Drill FLOAT4/FLOAT8 REST value to a Python float.
+
+    Finite values are JSON numbers (parsed as Decimal); Drill writes NaN and
+    the infinities as the strings "NaN", "Infinity" and "-Infinity", which
+    float() accepts.
+    """
+    return None if value is None else float(value)
 
 
 def DateFromTicks(ticks):

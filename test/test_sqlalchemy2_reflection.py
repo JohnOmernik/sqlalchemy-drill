@@ -774,7 +774,8 @@ def streaming_rest_engine(monkeypatch):
         listings={"": [{"name": "sibling.json", "isDirectory": False,
                          "isFile": True}]}, listing_state="COMPLETED",
         listing_limit=0, listing_error=None, plugin_type="file", max_rows="0",
-        table_listing=["other_collection"],
+        table_listing=["other_collection"], probe_columns=["v"],
+        probe_metadata=["INTEGER"],
     )
 
     def post(_url, *, data, **_kwargs):
@@ -784,7 +785,7 @@ def streaming_rest_engine(monkeypatch):
         if tag:
             query = query[tag.end():]
         state.calls.append(query)
-        columns, metadata, rows = ["v"], ["INTEGER"], state.rows
+        columns, metadata, rows = state.probe_columns, state.probe_metadata, state.rows
         query_state = "COMPLETED"
         if "sys.drillbits" in query:
             columns, metadata = ["version"], ["VARCHAR"]
@@ -1809,3 +1810,84 @@ def test_cancel_group_with_nothing_running_returns_false(monkeypatch):
     connection, _ = _tagging_connection(session)
     assert connection.cancel_query_group("ef" * 16) is False
     assert not any("/cancel/" in url for url, _ in session.gets)
+
+
+def _rest_connection_returning(columns, metadata, rows):
+    import io
+    import json
+
+    import requests
+
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    class Session(_RecordingSession):
+        def post(self, url, **kwargs):
+            response = requests.Response()
+            response.status_code = 200
+            if "sys.drillbits" in kwargs["data"]:
+                body = {"columns": ["version"], "metadata": ["VARCHAR"],
+                        "rows": [{"version": "1.21.2"}], "queryState": "COMPLETED"}
+            else:
+                body = {"queryId": "q", "columns": columns, "metadata": metadata,
+                        "rows": rows, "queryState": "COMPLETED"}
+            response.raw = io.BytesIO(json.dumps(body).encode())
+            return response
+
+    return _drilldbapi.Connection("h", 8047, "http://", None, Session())
+
+
+def test_rest_float_columns_decode_to_python_floats():
+    # Drill sends DOUBLE/FLOAT values as JSON numbers, and NaN and the
+    # infinities as the strings "NaN", "Infinity" and "-Infinity". The
+    # description says FLOAT, so every value must be a Python float (or None),
+    # never a Decimal or a string.
+    import math
+    import json as _json
+
+    raw = ('{"queryId": "q", "columns": ["a", "b", "c", "d", "e"], '
+           '"metadata": ["FLOAT8", "FLOAT4", "FLOAT8", "FLOAT8", "FLOAT8"], "rows": ['
+           '{"a": 1.25, "b": 1.5, "c": "NaN", "d": "Infinity", "e": "-Infinity"},'
+           '{"a": 0.1, "b": 0, "c": 1.0E300, "d": null, "e": -2}], '
+           '"queryState": "COMPLETED"}')
+    connection = _rest_connection_returning(**{k: v for k, v in _json.loads(raw).items()
+                                                if k in ("columns", "metadata", "rows")})
+    cursor = connection.cursor()
+    cursor.execute("SELECT a, b, c, d, e FROM t")
+    first, second = cursor.fetchall()
+    assert [type(v) for v in first] == [float] * 5
+    assert first[:2] == (1.25, 1.5) and math.isnan(first[2])
+    assert first[3:] == (math.inf, -math.inf)
+    assert second == (0.1, 0.0, 1e300, None, -2.0)
+    assert [type(v) for v in second] == [float, float, float, type(None), float]
+
+
+def test_rest_decimal_description_carries_precision_and_scale():
+    import decimal
+
+    connection = _rest_connection_returning(
+        ["amount", "n", "name"], ["VARDECIMAL(12, 3)", "DECIMAL(38,0)", "VARCHAR(65535)"],
+        [{"amount": 12345.678, "n": 12345678901234567890123456789012345678, "name": "x"}])
+    cursor = connection.cursor()
+    cursor.execute("SELECT amount, n, name FROM t")
+    assert [(d[0], d[4], d[5]) for d in cursor.description] == [
+        ("amount", 12, 3), ("n", 38, 0), ("name", None, None)]
+    assert cursor.fetchall() == [(decimal.Decimal("12345.678"),
+                                  decimal.Decimal("12345678901234567890123456789012345678"), "x")]
+
+
+def test_file_reflection_maps_vardecimal_with_precision_and_scale(streaming_rest_engine):
+    # Drill reports DECIMAL columns of file-backed tables (Parquet, JSON with
+    # decimals enabled) as VARDECIMAL(p, s) in the probe's metadata.
+    from sqlalchemy import types as sa_types
+
+    engine, state = streaming_rest_engine
+    state.probe, state.query_state = "columns", "COMPLETED"
+    state.probe_columns = ["amount", "ratio", "n"]
+    state.probe_metadata = ["VARDECIMAL(12, 3)", "FLOAT8", "BIGINT"]
+    state.rows = [{"amount": 1.5, "ratio": 2.0, "n": 1}]
+    with engine.connect() as connection:
+        columns = inspect(connection).get_columns("t.parquet", "cp.default")
+    amount, ratio, n = (column["type"] for column in columns)
+    assert isinstance(amount, sa_types.DECIMAL)
+    assert (amount.precision, amount.scale) == (12, 3)
+    assert isinstance(ratio, sa_types.FLOAT) and isinstance(n, sa_types.BIGINT)

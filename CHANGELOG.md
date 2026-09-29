@@ -1,3 +1,16 @@
+## [1.1.11.6] - unreleased
+
+### Fixed
+
+- REST results decoded DOUBLE and FLOAT columns as `Decimal`, and NaN,
+  Infinity and -Infinity as the strings `'NaN'`, `'Infinity'` and
+  `'-Infinity'`, although the cursor description reports FLOAT. FLOAT4 and
+  FLOAT8 values are now Python floats (or `None`).
+- Reflection of DECIMAL columns in file-backed tables (for example Parquet)
+  returned `UserDefinedType`, because Drill reports them as
+  `VARDECIMAL(p, s)`. They now reflect as `DECIMAL(p, s)`, and the REST
+  cursor description carries the precision and scale.
+
 ## [1.1.11.5] - unreleased
 
 ### Fixed
