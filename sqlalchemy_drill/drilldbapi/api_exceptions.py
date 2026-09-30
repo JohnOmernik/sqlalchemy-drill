@@ -50,6 +50,14 @@ class OperationalError(Error):
         return repr(f"{self.message} HTTP ERROR: {self.httperror}")
 
 
+class TransportError(OperationalError):
+    """The HTTP transport to Drill failed or timed out.
+
+    The REST session is in an unknown state, so SQLAlchemy should treat it
+    as a disconnect and discard the connection.
+    """
+
+
 class IntegrityError(Error):
     """Integrity error."""
 

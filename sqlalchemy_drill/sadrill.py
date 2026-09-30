@@ -67,6 +67,17 @@ class DrillDialect_sadrill(DrillDialect):
         import sqlalchemy_drill.drilldbapi as module  # pylint: disable=import-outside-toplevel
         return module
 
+    def is_disconnect(self, e, connection, cursor):
+        """Report REST transport failures and closed handles as disconnects.
+
+        Lets pool_pre_ping and SQLAlchemy's invalidation replace a pooled
+        connection whose HTTP session failed or was closed, instead of
+        handing it out again.
+        """
+        from sqlalchemy_drill.drilldbapi.api_exceptions import (  # pylint: disable=import-outside-toplevel
+            ConnectionClosedException, TransportError)
+        return isinstance(e, (TransportError, ConnectionClosedException))
+
     @classmethod
     def dbapi(cls):
         """Deprecated in SQLAlchemy, retained for backwards compatibility."""
@@ -102,6 +113,17 @@ class DrillDialect_sadrill(DrillDialect):
             # Convert stream_results to boolean if present
             if 'stream_results' in qargs:
                 qargs['stream_results'] = qargs['stream_results'] in [True, 'True', 'true', '1']
+
+            # URL query values are strings. requests treats any string
+            # verify value as a CA bundle path, so "true" must become True
+            # (system trust store) and "false" False; other values remain a
+            # CA bundle path.
+            if isinstance(qargs.get('verify_ssl'), str):
+                flag = qargs['verify_ssl'].strip().lower()
+                if flag in ('true', '1', 'yes'):
+                    qargs['verify_ssl'] = True
+                elif flag in ('false', '0', 'no'):
+                    qargs['verify_ssl'] = False
 
             if url.username:
                 qargs['drilluser'] = url.username

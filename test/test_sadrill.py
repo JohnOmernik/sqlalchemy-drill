@@ -232,20 +232,32 @@ def test_syntax_error_during_reflection_raises_live(drill_conn, operation):
 
 
 @pytest.mark.parametrize("operation", ["has_table", "get_columns", "autoload"])
-def test_unreachable_server_raises_live(drill_conn, operation, monkeypatch):
+def test_unreachable_server_raises_live(drill_conn, operation):
     import socket
     from requests import ConnectionError
 
+    from sqlalchemy_drill.drilldbapi import TransportError
+
     # Bind without listening: a real refused TCP connection, without racing
-    # another process to claim a supposedly unused port. Restore the live
-    # connection before fixture teardown resets the server option.
-    with socket.socket() as unavailable:
-        unavailable.bind(("127.0.0.1", 0))
-        with monkeypatch.context() as patch:
-            patch.setattr(drill_conn.connection.dbapi_connection, "_base_url",
-                          f"http://127.0.0.1:{unavailable.getsockname()[1]}")
-            with pytest.raises(ConnectionError):
-                _live_reflect(drill_conn, operation, "unreachable.json")
+    # another process to claim a supposedly unused port. A refused transport
+    # is a disconnect, and SQLAlchemy invalidates that connection, so use a
+    # dedicated one rather than the module-scoped drill_conn.
+    engine = create_engine(drill_conn.engine.url)
+    try:
+        with socket.socket() as unavailable:
+            unavailable.bind(("127.0.0.1", 0))
+            with engine.connect() as conn:
+                conn.connection.dbapi_connection._base_url = (
+                    f"http://127.0.0.1:{unavailable.getsockname()[1]}")
+                with pytest.raises(sa_exc.OperationalError) as caught:
+                    _live_reflect(conn, operation, "unreachable.json")
+        # Never classified as absence: a DB-API disconnect caused by the
+        # refused connection.
+        assert isinstance(caught.value.orig, TransportError)
+        assert isinstance(caught.value.orig.__cause__, ConnectionError)
+        assert caught.value.connection_invalidated
+    finally:
+        engine.dispose()
 
 
 def test_success_never_fetches_profile_live(drill_conn, absence_files, monkeypatch):

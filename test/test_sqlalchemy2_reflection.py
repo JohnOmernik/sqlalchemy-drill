@@ -1,6 +1,7 @@
 import datetime
 import decimal
 import importlib
+import re
 import sys
 import types as python_types
 import warnings
@@ -73,6 +74,14 @@ class FakeCursor:
                 (table,) for candidate_schema, table in state.tables
                 if candidate_schema == schema
             ]
+        elif "SELECT `TABLE_SCHEMA`, `VIEW_DEFINITION` FROM INFORMATION_SCHEMA.`VIEWS`" in normalized:
+            self.description = self._description("TABLE_SCHEMA", "VIEW_DEFINITION")
+            self._rows = [(schema, sql) for (schema, name), sql in sorted(state.view_sql.items())
+                          if name == parameters[0]]
+        elif "SELECT `VIEW_DEFINITION` FROM INFORMATION_SCHEMA.`VIEWS`" in normalized:
+            self.description = self._description("VIEW_DEFINITION")
+            self._rows = ([(state.view_sql[parameters],)]
+                          if parameters in state.view_sql else [])
         elif "FROM INFORMATION_SCHEMA.`VIEWS`" in normalized:
             self.description = self._description("TABLE_NAME")
             schema = parameters[0]
@@ -160,6 +169,7 @@ class FakeState:
             "dfs.tmp": "file",
             "jdbc.prod": "jdbc",
             "mongo.analytics": "mongo",
+            "kafka": "kafka",
         }
         self.tables = {
             ("jdbc.prod", "accounts"),
@@ -169,7 +179,11 @@ class FakeState:
             ("dfs.tmp", "saved_view"),
             ("jdbc.prod", "account_view"),
         }
+        self.view_sql = {
+            ("jdbc.prod", "account_view"): "SELECT `id`\nFROM `jdbc`.`prod`.`accounts`",
+        }
         self.columns = {
+            ("kafka", "orders_topic"): [("**", "ANY", "YES")],
             ("jdbc.prod", "accounts"): [
                 ("id", "INTEGER", "NO"),
                 ("display_name", "VARCHAR", "YES"),
@@ -760,12 +774,18 @@ def streaming_rest_engine(monkeypatch):
         listings={"": [{"name": "sibling.json", "isDirectory": False,
                          "isFile": True}]}, listing_state="COMPLETED",
         listing_limit=0, listing_error=None, plugin_type="file", max_rows="0",
+        table_listing=["other_collection"], probe_columns=["v"],
+        probe_metadata=["INTEGER"],
     )
 
     def post(_url, *, data, **_kwargs):
         query = json.loads(data)["query"]
+        # Cursor statements carry a leading cancellation tag comment.
+        tag = re.match(r"/\* sqlalchemy-drill:[0-9a-f]{32} \*/ ", query)
+        if tag:
+            query = query[tag.end():]
         state.calls.append(query)
-        columns, metadata, rows = ["v"], ["INTEGER"], state.rows
+        columns, metadata, rows = state.probe_columns, state.probe_metadata, state.rows
         query_state = "COMPLETED"
         if "sys.drillbits" in query:
             columns, metadata = ["version"], ["VARCHAR"]
@@ -784,6 +804,10 @@ def streaming_rest_engine(monkeypatch):
             metadata = ["VARCHAR", "BIT", "BIT"]
             directory = query.removeprefix('SHOW FILES FROM cp.`default`')
             rows = state.listings.get(directory, [])
+            query_state = state.listing_state
+        elif "SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.`TABLES`" in query:
+            columns, metadata = ["TABLE_NAME"], ["VARCHAR"]
+            rows = [{"TABLE_NAME": name} for name in state.table_listing]
             query_state = state.listing_state
         elif "INFORMATION_SCHEMA.`VIEWS`" in query:
             rows = []
@@ -927,9 +951,10 @@ def test_missing_object_reflection_contract(streaming_rest_engine, operation,
     else:
         with pytest.raises(sa_exc.NoSuchTableError):
             _reflect(engine, operation)
-    assert state.profile_calls == [(
-        "http://localhost:8047/profiles/test-query-id.json", {"timeout": 30}
-    )]
+    # One profile read, bounded by the remaining 30 s poll budget.
+    assert [url for url, _ in state.profile_calls] == [
+        "http://localhost:8047/profiles/test-query-id.json"]
+    assert 29 < state.profile_calls[0][1]["timeout"] <= 30
     assert all(not cursor._is_open for cursor in state.cursors)
 
 
@@ -993,9 +1018,12 @@ def test_dead_server_is_never_absence(streaming_rest_engine, verbose, operation)
     engine, state = streaming_rest_engine
     _failed_reflection(state, _MISSING_OBJECT, verbose)
     state.transport_error = ConnectionError("server is unavailable")
-    with pytest.raises(ConnectionError) as caught:
+    # Transport failures are DB-API OperationalErrors that SQLAlchemy treats
+    # as disconnects; they are never classified as absence.
+    with pytest.raises(sa_exc.OperationalError) as caught:
         _reflect(engine, operation)
-    assert caught.value is state.transport_error
+    assert caught.value.orig.__cause__ is state.transport_error
+    assert caught.value.connection_invalidated
     assert state.profile_calls == []
 
 
@@ -1003,9 +1031,10 @@ def test_dead_server_is_never_absence(streaming_rest_engine, verbose, operation)
 @pytest.mark.parametrize("problem", ["http", "transport", "json", "no_error", "not_object"])
 @pytest.mark.parametrize("verbose", [False, True])
 def test_unavailable_profile_preserves_failure(
-        streaming_rest_engine, verbose, operation, problem):
+        streaming_rest_engine, verbose, operation, problem, monkeypatch):
     from requests import ConnectionError
 
+    monkeypatch.setattr("sqlalchemy_drill.base.sleep", lambda _delay: None)
     engine, state = streaming_rest_engine
     _failed_reflection(state, _MISSING_OBJECT, verbose)
     if problem == "http":
@@ -1021,7 +1050,7 @@ def test_unavailable_profile_preserves_failure(
         state.profile_payload = []
     with pytest.raises(sa_exc.DatabaseError, match="query state is FAILED"):
         _reflect(engine, operation)
-    assert len(state.profile_calls) == (3 if problem == "no_error" else 1)
+    assert len(state.profile_calls) == (7 if problem == "no_error" else 1)
 
 
 @pytest.mark.parametrize("verbose", [False, True])
@@ -1035,6 +1064,41 @@ def test_profile_publication_can_lag_failed_query(
     assert _reflect(engine, "has_table") is False
     assert len(state.profile_calls) == 3
     assert delays == [0.1, 0.2]
+
+
+@pytest.mark.parametrize("operation", ["has_table", "get_columns", "autoload"])
+@pytest.mark.parametrize("verbose", [False, True])
+def test_busy_server_profile_lag_still_proves_absence(
+        streaming_rest_engine, verbose, operation, monkeypatch):
+    # A busy server published the failed profile's error only after 0.3 s:
+    # the opaque REST failure must still become proven absence, not a
+    # DatabaseError, once the authoritative profile arrives.
+    engine, state = streaming_rest_engine
+    _failed_reflection(state, _MISSING_OBJECT, verbose)
+    state.incomplete_profiles = 5
+    delays = []
+    monkeypatch.setattr("sqlalchemy_drill.base.sleep", delays.append)
+    if operation == "has_table":
+        assert _reflect(engine, operation) is False
+    else:
+        with pytest.raises(sa_exc.NoSuchTableError):
+            _reflect(engine, operation)
+    assert len(state.profile_calls) == 6
+    assert delays == [0.1, 0.2, 0.4, 0.8, 1.6]
+    assert sum(delays) > 0.3
+
+
+def test_profile_that_never_publishes_an_error_is_bounded(
+        streaming_rest_engine, monkeypatch):
+    engine, state = streaming_rest_engine
+    _failed_reflection(state, _MISSING_OBJECT)
+    state.incomplete_profiles = 100
+    delays = []
+    monkeypatch.setattr("sqlalchemy_drill.base.sleep", delays.append)
+    with pytest.raises(sa_exc.DatabaseError, match="query state is FAILED"):
+        _reflect(engine, "has_table")
+    assert len(state.profile_calls) == 7
+    assert sum(delays) == pytest.approx(5.1)
 
 
 @pytest.mark.parametrize("verbose", [False, True])
@@ -1079,13 +1143,20 @@ def test_unproven_absence_preserves_original_error(streaming_rest_engine, verbos
     elif problem == "server_limit":
         state.max_rows = "1"
     elif problem == "mongo":
+        # An empty collection listing cannot prove absence.
         state.plugin_type = "mongo"
+        state.table_listing = []
     elif problem == "unknown_schema":
         state.plugin_type = None
     with pytest.raises(sa_exc.DatabaseError) as caught:
         _reflect(engine, operation)
     assert caught.value.orig._drill_cursor.result_md == state.failure_payload
-    assert all(not cursor._is_open for cursor in state.cursors)
+    # A transport failure invalidates the connection (a disconnect); its
+    # never-streamed cursor is discarded with it rather than closed.
+    assert all(not cursor._is_open or not cursor.connection._connected
+               for cursor in state.cursors)
+    assert all(cursor._row_stream is None or not cursor._is_open
+               for cursor in state.cursors)
 
 
 @pytest.mark.parametrize("name", ["../x", "/x", "a//b", "a/./b", "a*", "a?b",
@@ -1121,3 +1192,761 @@ def test_success_and_ordinary_query_errors_never_fetch_profiles(
     state.query_state = "COMPLETED"
     assert _reflect(engine, "has_table") is True
     assert state.profile_calls == []
+
+
+@pytest.mark.parametrize("column_type,ticks,expected", [
+    ("TIMESTAMP", 0, datetime.datetime(1970, 1, 1)),
+    ("DATE", 0, datetime.date(1970, 1, 1)),
+    ("TIME", 0, datetime.time(0, 0)),
+    ("TIMESTAMP", 1790426096789,
+     datetime.datetime(2026, 9, 26, 12, 34, 56, 789000)),
+    ("TIME", 45296789, datetime.time(12, 34, 56, 789000)),
+    ("TIMESTAMP", -1000, datetime.datetime(1969, 12, 31, 23, 59, 59)),
+    ("DATE", -2208988800000, datetime.date(1900, 1, 1)),
+    ("TIMESTAMP", None, None),
+    ("DATE", None, None),
+    ("TIME", None, None),
+])
+def test_rest_temporal_values_keep_zero_and_milliseconds(column_type, ticks, expected):
+    # Drill >= 1.19 REST sends temporal values as epoch milliseconds. Zero is
+    # midnight / the epoch, not NULL, and the millisecond fraction is data.
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    decode = {"DATE": _drilldbapi.DateFromTicks, "TIME": _drilldbapi.TimeFromTicks,
+              "TIMESTAMP": _drilldbapi.TimestampFromTicks}[column_type]
+    got = decode(ticks)
+    assert got == expected and type(got) is type(expected)
+
+
+def test_view_definition_reads_bound_information_schema(fake_engine):
+    engine, state = fake_engine
+    inspector = sqlalchemy.inspect(engine)
+    assert inspector.get_view_definition("account_view", "jdbc.prod") == (
+        "SELECT `id`\nFROM `jdbc`.`prod`.`accounts`"
+    )
+    statement, parameters = state.calls[-1]
+    assert "account_view" not in statement and "jdbc.prod" not in statement
+    assert parameters == ("jdbc.prod", "account_view")
+    with pytest.raises(sa_exc.NoSuchTableError):
+        inspector.get_view_definition("no_such_view", "jdbc.prod")
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("true", True), ("True", True), ("1", True),
+    ("false", False), ("False", False), ("0", False),
+    ("/etc/ssl/certs/ca.pem", "/etc/ssl/certs/ca.pem"),
+])
+def test_rest_verify_ssl_url_value_is_a_flag_or_a_ca_bundle_path(value, expected):
+    # requests reads every string verify value as a CA bundle path, so the
+    # natural verify_ssl=true URL spelling must reach it as a boolean.
+    from sqlalchemy.engine import make_url
+
+    _args, kwargs = DrillDialect_sadrill().create_connect_args(
+        make_url(f"drill+sadrill://h:8047/dfs/tmp?use_ssl=true&verify_ssl={value}"))
+    assert kwargs["verify_ssl"] == expected and type(kwargs["verify_ssl"]) is type(expected)
+
+
+def test_rest_verify_ssl_is_absent_unless_configured():
+    from sqlalchemy.engine import make_url
+
+    _args, kwargs = DrillDialect_sadrill().create_connect_args(
+        make_url("drill+sadrill://h:8047/dfs/tmp?use_ssl=true"))
+    assert "verify_ssl" not in kwargs
+
+
+class _RecordingSession:
+    """Minimal requests.Session stand-in that records request timeouts."""
+
+    def __init__(self, fail_on=None):
+        self.timeouts = []
+        self.fail_on = fail_on
+        self.verify = False
+
+    def post(self, url, **kwargs):
+        import io
+        import json
+
+        import requests
+
+        self.timeouts.append(kwargs.get("timeout"))
+        if self.fail_on and self.fail_on in url and len(self.timeouts) > 1:
+            raise requests.exceptions.ReadTimeout("read timed out")
+        response = requests.Response()
+        response.status_code = 200
+        body = {"columns": ["version"], "metadata": ["VARCHAR"],
+                "rows": [{"version": "1.21.2"}], "queryState": "COMPLETED"}
+        response.raw = io.BytesIO(json.dumps(body).encode())
+        return response
+
+
+@pytest.mark.parametrize("configured,expected", [(None, None), ("2.5", 2.5), (7, 7.0)])
+def test_rest_request_timeout_is_opt_in_and_reaches_every_request(
+        monkeypatch, configured, expected):
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    session = _RecordingSession()
+    monkeypatch.setattr(_drilldbapi, "Session", lambda: session)
+    kwargs = {} if configured is None else {"request_timeout": configured}
+    connection = _drilldbapi.connect("h", 8047, **kwargs)
+    connection.submit_query("SELECT 1")
+    # login probe, version query, then the explicit query
+    assert session.timeouts == [expected] * 3
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "soon"])
+def test_rest_request_timeout_rejects_non_positive_or_non_numeric(value):
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    with pytest.raises(_drilldbapi.ProgrammingError, match="request_timeout"):
+        _drilldbapi.connect("h", 8047, request_timeout=value)
+
+
+def test_rest_request_timeout_raises_operational_error(monkeypatch):
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    session = _RecordingSession(fail_on="query.json")
+    monkeypatch.setattr(_drilldbapi, "Session", lambda: session)
+    connection = _drilldbapi.Connection(
+        "h", 8047, "http://", None, session, request_timeout=1.5)
+    with pytest.raises(_drilldbapi.OperationalError, match="timed out after 1.5 s"):
+        connection.submit_query("SELECT 1")
+
+
+def test_rest_request_timeout_url_value_reaches_connect():
+    from sqlalchemy.engine import make_url
+
+    _args, kwargs = DrillDialect_sadrill().create_connect_args(
+        make_url("drill+sadrill://h:8047/dfs/tmp?request_timeout=30"))
+    assert kwargs["request_timeout"] == "30"
+    _args, kwargs = DrillDialect_sadrill().create_connect_args(
+        make_url("drill+sadrill://h:8047/dfs/tmp"))
+    assert "request_timeout" not in kwargs
+
+
+class _CancelSession(_RecordingSession):
+    def __init__(self, reply="Cancelled query q-1 on locally running node.",
+                 status=200):
+        super().__init__()
+        self.reply, self.status, self.gets = reply, status, []
+
+    def get(self, url, **kwargs):
+        import io
+
+        import requests
+
+        self.gets.append((url, kwargs))
+        response = requests.Response()
+        response.status_code = self.status
+        response.raw = io.BytesIO(self.reply.encode())
+        return response
+
+
+@pytest.mark.parametrize("reply,expected", [
+    ("Cancelled query q/1 on locally running node.", True),
+    ("Query q/1 canceled on node drillbit-2.", True),
+    ("Attempted to cancel query q/1 on drillbit-2 but the query is no longer "
+     "active on that node.", False),
+    ("Failure attempting to cancel query q/1.  Unable to find information about "
+     "where query is actively running.", False),
+])
+def test_rest_cancel_query_uses_the_cancel_endpoint(reply, expected):
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    session = _CancelSession(reply)
+    connection = _drilldbapi.Connection("h", 8047, "http://", None, session)
+    assert connection.cancel_query("q/1") is expected
+    assert session.gets == [("http://h:8047/profiles/cancel/q%2F1", {"timeout": 30})]
+
+
+def test_rest_cancel_query_http_failure_is_operational_error():
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    connection = _drilldbapi.Connection(
+        "h", 8047, "http://", None, _CancelSession("denied", status=403))
+    with pytest.raises(_drilldbapi.OperationalError, match="cancel request failed"):
+        connection.cancel_query("q-1")
+
+
+class _RunningSession(_CancelSession):
+    """Serves /profiles/running.json and the cancel endpoint."""
+
+    def __init__(self, running, reply="Cancelled query q-7 on locally running node."):
+        super().__init__(reply)
+        self.running = running
+
+    def get(self, url, **kwargs):
+        import io
+        import json
+
+        import requests
+
+        if url.endswith("/profiles/running.json"):
+            self.gets.append((url, kwargs))
+            response = requests.Response()
+            response.status_code = 200
+            response.raw = io.BytesIO(json.dumps({"runningQueries": self.running}).encode())
+            return response
+        return super().get(url, **kwargs)
+
+
+@pytest.mark.parametrize("url_value,expected", [(None, True), ("false", False), ("/ca.pem", "/ca.pem")])
+def test_rest_tls_is_verified_by_default(monkeypatch, url_value, expected):
+    from sqlalchemy.engine import make_url
+
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    session = _RecordingSession()
+    monkeypatch.setattr(_drilldbapi, "Session", lambda: session)
+    query = "use_ssl=true" + ("" if url_value is None else f"&verify_ssl={url_value}")
+    _args, kwargs = DrillDialect_sadrill().create_connect_args(
+        make_url(f"drill+sadrill://h:8047/dfs/tmp?{query}"))
+    kwargs.pop("db")
+    _drilldbapi.connect(**kwargs)
+    assert session.verify == expected
+
+
+def test_transport_failures_are_disconnects():
+    from requests import ConnectionError
+
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    dialect = DrillDialect_sadrill()
+    session = _RecordingSession()
+    connection = _drilldbapi.Connection("h", 8047, "http://", None, session)
+
+    def fail(url, **kwargs):
+        raise ConnectionError("connection refused")
+
+    session.post = fail
+    with pytest.raises(_drilldbapi.OperationalError) as caught:
+        connection.submit_query("SELECT 1")
+    assert isinstance(caught.value, _drilldbapi.TransportError)
+    assert dialect.is_disconnect(caught.value, None, None)
+    closed = _drilldbapi.ConnectionClosedException("closed")
+    assert dialect.is_disconnect(closed, None, None)
+    assert not dialect.is_disconnect(_drilldbapi.DatabaseError("syntax", None), None, None)
+
+
+def test_stream_wrapper_reads_in_chunks_and_wraps_stream_failures():
+    from requests import ConnectionError
+
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    class Resp:
+        def __init__(self, chunks):
+            self.chunks, self.sizes = chunks, []
+
+        def iter_content(self, chunk_size):
+            self.sizes.append(chunk_size)
+            for chunk in self.chunks:
+                if isinstance(chunk, Exception):
+                    raise chunk
+                yield chunk
+
+    resp = Resp([b"abc", b"defgh"])
+    wrapper = _drilldbapi.RequestsStreamWrapper(resp)
+    assert wrapper.read(2) == b"ab"
+    assert resp.sizes == [65536]
+    assert wrapper.read(10) == b"cdefgh"
+    assert wrapper.read(10) == b""
+    broken = _drilldbapi.RequestsStreamWrapper(Resp([b"x", ConnectionError("reset")]))
+    with pytest.raises(_drilldbapi.TransportError, match="result stream"):
+        broken.read(5)
+
+def test_streamed_query_body_is_not_read_into_memory():
+    # Evaluating Response.text downloads the whole body, so a streamed
+    # query must never touch it (not even for debug logging).
+    import io
+    import json
+
+    import requests
+
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    touched = []
+
+    class Guarded(requests.Response):
+        @property
+        def text(self):
+            touched.append(True)
+            return super().text
+
+    class Session(_RecordingSession):
+        def post(self, url, **kwargs):
+            response = Guarded()
+            response.status_code = 200
+            if "sys.drillbits" in kwargs["data"]:
+                body = {"columns": ["version"], "metadata": ["VARCHAR"],
+                        "rows": [{"version": "1.21.2"}], "queryState": "COMPLETED"}
+            else:
+                body = {"queryId": "q", "columns": ["v"], "metadata": ["INTEGER"],
+                        "rows": [{"v": 1}, {"v": 2}], "queryState": "COMPLETED"}
+            response.raw = io.BytesIO(json.dumps(body).encode())
+            return response
+
+    connection = _drilldbapi.Connection("h", 8047, "http://", None, Session())
+    touched.clear()
+    cursor = connection.cursor()
+    cursor.execute("SELECT v FROM t")
+    assert cursor.fetchall() == [(1,), (2,)]
+    assert touched == []
+
+
+def test_dynamic_schema_plugin_reflects_real_columns_not_the_placeholder(fake_engine):
+    # Kafka (and other dynamic-schema plugins) list a single `**` column in
+    # INFORMATION_SCHEMA; the real columns come from a LIMIT 1 probe.
+    engine, state = fake_engine
+    with engine.connect() as connection:
+        columns = connection.dialect.get_columns(connection, "orders_topic", "kafka")
+    assert [column["name"] for column in columns] == ["id", "payload"]
+    assert any(statement == "SELECT * FROM kafka.orders_topic LIMIT 1"
+               for statement, _ in state.calls)
+
+
+@pytest.mark.parametrize("operation", ["has_table", "get_columns", "autoload"])
+@pytest.mark.parametrize("verbose", [False, True])
+def test_missing_mongo_collection_is_proven_absent_from_a_complete_listing(
+        streaming_rest_engine, verbose, operation):
+    engine, state = streaming_rest_engine
+    _failed_reflection(state, _MISSING_OBJECT, verbose)
+    state.plugin_type = "mongo"
+    if operation == "has_table":
+        assert _reflect(engine, operation) is False
+    else:
+        with pytest.raises(sa_exc.NoSuchTableError):
+            _reflect(engine, operation)
+
+
+@pytest.mark.parametrize("problem", ["empty", "listed", "failed", "server_limit"])
+def test_unprovable_mongo_absence_keeps_the_original_error(streaming_rest_engine, problem):
+    engine, state = streaming_rest_engine
+    _failed_reflection(state, _MISSING_OBJECT)
+    state.plugin_type = "mongo"
+    if problem == "empty":
+        state.table_listing = []
+    elif problem == "listed":
+        state.table_listing = ["resource.json"]
+    elif problem == "failed":
+        state.listing_state = "FAILED"
+    else:
+        state.max_rows = "1"
+    with pytest.raises(sa_exc.DatabaseError) as caught:
+        _reflect(engine, "get_columns")
+    assert not isinstance(caught.value, sa_exc.NoSuchTableError)
+
+
+def test_profile_poll_shares_the_request_timeout_budget(streaming_rest_engine, monkeypatch):
+    # Every profile read and backoff sleep comes out of one budget: the
+    # connection's request_timeout (here 2 s), never 7 x 30 s.
+    engine, state = streaming_rest_engine
+    _failed_reflection(state, _MISSING_OBJECT)
+    state.incomplete_profiles = 100
+    clock = [0.0]
+    monkeypatch.setattr("sqlalchemy_drill.base.monotonic", lambda: clock[0])
+
+    def fake_sleep(delay):
+        clock[0] += delay
+
+    monkeypatch.setattr("sqlalchemy_drill.base.sleep", fake_sleep)
+    with engine.connect() as connection:
+        connection.connection.dbapi_connection._request_timeout = 2
+        with pytest.raises(sa_exc.DatabaseError):
+            connection.dialect.has_table(connection, "resource.json", "cp.default")
+    timeouts = [kwargs["timeout"] for _, kwargs in state.profile_calls]
+    assert timeouts and all(0 < t <= 2 for t in timeouts)
+    assert clock[0] < 2
+
+
+def test_profile_poll_without_request_timeout_is_bounded_to_30_seconds(
+        streaming_rest_engine, monkeypatch):
+    engine, state = streaming_rest_engine
+    _failed_reflection(state, _MISSING_OBJECT)
+    state.incomplete_profiles = 100
+    clock = [0.0]
+    monkeypatch.setattr("sqlalchemy_drill.base.monotonic", lambda: clock[0])
+
+    def slow_get_then_sleep(delay):
+        clock[0] += delay
+
+    original_get_calls = state.profile_calls
+    monkeypatch.setattr("sqlalchemy_drill.base.sleep", slow_get_then_sleep)
+
+    # Model each profile read taking 12 s of wall clock.
+    import sqlalchemy_drill.base as base_module
+    real_quote = base_module.quote
+
+    def quote_and_advance(value, safe=""):
+        clock[0] += 12
+        return real_quote(value, safe=safe)
+
+    monkeypatch.setattr("sqlalchemy_drill.base.quote", quote_and_advance)
+    with pytest.raises(sa_exc.DatabaseError):
+        _reflect(engine, "has_table")
+    assert len(original_get_calls) <= 3
+    assert clock[0] <= 30 + 12
+
+
+
+def _tagging_connection(session):
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    queries = []
+    original = session.post
+
+    def post(url, **kwargs):
+        import json
+
+        queries.append(json.loads(kwargs["data"])["query"])
+        return original(url, **kwargs)
+
+    session.post = post
+    return _drilldbapi.Connection("h", 8047, "http://", None, session,
+                                  request_timeout=session_timeout(session)), queries
+
+
+def session_timeout(session):
+    return getattr(session, "request_timeout", None)
+
+
+def test_each_statement_carries_its_own_cancellation_tag():
+    connection, queries = _tagging_connection(_RecordingSession())
+    cursor = connection.cursor()
+    assert cursor.query_tag is None
+    cursor.execute("SELECT 1")
+    first = cursor.query_tag
+    cursor.execute("SELECT 2")
+    second = cursor.query_tag
+    assert re.fullmatch(r"[0-9a-f]{32}", first) and first != second
+    assert queries[-2:] == [f"/* sqlalchemy-drill:{first} */ SELECT 1",
+                            f"/* sqlalchemy-drill:{second} */ SELECT 2"]
+
+
+def test_cursor_cancel_targets_only_its_latest_statement():
+    session = _RunningSession([])
+    session.request_timeout = 4
+    connection, _ = _tagging_connection(session)
+    cursor = connection.cursor()
+    cursor.execute("SELECT 1")
+    old = cursor.query_tag
+    cursor.execute("SELECT 2")
+    # The earlier statement is (hypothetically) still listed; it must never
+    # be the one cancelled.
+    session.running = [
+        {"queryId": "q-old", "query": f"/* sqlalchemy-drill:{old} */ SELECT 1"},
+        {"queryId": "q-7", "query": f"/* sqlalchemy-drill:{cursor.query_tag} */ SELECT 2"},
+    ]
+    session.gets.clear()
+    assert cursor.cancel() is True
+    assert session.gets == [
+        ("http://h:8047/profiles/running.json", {"timeout": 4}),
+        ("http://h:8047/profiles/cancel/q-7", {"timeout": 4}),
+    ]
+
+
+def test_cursor_cancel_without_a_statement_or_running_query_returns_false(monkeypatch):
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    monkeypatch.setattr(_drilldbapi, "sleep", lambda _s: None)
+    session = _RunningSession([{"queryId": "q-x", "query": "SELECT 1"}])
+    connection, _ = _tagging_connection(session)
+    cursor = connection.cursor()
+    assert cursor.cancel() is False
+    assert session.gets == []
+    cursor.execute("SELECT 1")
+    assert cursor.cancel() is False
+    assert [url for url, _ in session.gets] == ["http://h:8047/profiles/running.json"] * 3
+
+
+def test_ambiguous_tag_is_never_cancelled():
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    session = _RunningSession([])
+    connection, _ = _tagging_connection(session)
+    cursor = connection.cursor()
+    cursor.execute("SELECT 1")
+    tagged = f"/* sqlalchemy-drill:{cursor.query_tag} */ SELECT 1"
+    session.running = [{"queryId": "a", "query": tagged}, {"queryId": "b", "query": tagged}]
+    with pytest.raises(_drilldbapi.OperationalError, match="carry tag"):
+        cursor.cancel()
+    assert not any("/cancel/" in url for url, _ in session.gets)
+
+
+def test_request_timeout_cancels_the_server_query():
+    import requests
+
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    session = _RunningSession([])
+    session.request_timeout = 3
+    connection, queries = _tagging_connection(session)
+    cursor = connection.cursor()
+    posted = session.post
+
+    def post(url, **kwargs):
+        posted(url, **kwargs)
+        tag = re.match(r"/\* sqlalchemy-drill:([0-9a-f]{32}) \*/", queries[-1]).group(1)
+        session.running = [{"queryId": "q-slow",
+                            "query": f"/* sqlalchemy-drill:{tag} */ SELECT slow"}]
+        raise requests.exceptions.ReadTimeout("read timed out")
+
+    session.post = post
+    with pytest.raises(_drilldbapi.TransportError, match="timed out after 3"):
+        cursor.execute("SELECT slow")
+    assert ("http://h:8047/profiles/cancel/q-slow", {"timeout": 3}) in session.gets
+
+
+def test_connection_failure_does_not_attempt_a_cancel():
+    import requests
+
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    session = _RunningSession([])
+    session.request_timeout = 3
+    connection, _ = _tagging_connection(session)
+
+    def refused(url, **kwargs):
+        raise requests.exceptions.ConnectionError("refused")
+
+    session.post = refused
+    with pytest.raises(_drilldbapi.TransportError):
+        connection.cursor().execute("SELECT 1")
+    assert session.gets == []
+
+
+
+def test_view_definition_without_any_schema_searches_all_schemas():
+    # No schema argument and no URL database used to bind TABLE_SCHEMA = NULL,
+    # which never matches.
+    state = FakeState()
+    state.view_sql[("dfs.tmp", "saved_view")] = "SELECT 1"
+    engine = create_engine("drill+sadrill://localhost:8047", module=FakeDBAPI(state))
+    try:
+        inspector = sqlalchemy.inspect(engine)
+        assert inspector.get_view_definition("account_view") == (
+            "SELECT `id`\nFROM `jdbc`.`prod`.`accounts`"
+        )
+        assert all(None not in parameters for _statement, parameters in state.calls)
+        with pytest.raises(sa_exc.NoSuchTableError):
+            inspector.get_view_definition("no_such_view")
+        state.view_sql[("jdbc.prod", "saved_view")] = "SELECT 2"
+        with pytest.raises(sa_exc.InvalidRequestError, match="several schemas"):
+            sqlalchemy.inspect(engine).get_view_definition("saved_view")
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("verify,where", [(True, "the system trust store"),
+                                          ("/etc/drill/ca.pem", "the CA bundle '/etc/drill/ca.pem'")])
+def test_untrusted_certificate_error_names_the_migration(monkeypatch, verify, where):
+    import requests
+
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    session = _RecordingSession()
+
+    def untrusted(url, **kwargs):
+        raise requests.exceptions.SSLError(
+            "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate")
+
+    session.post = untrusted
+    monkeypatch.setattr(_drilldbapi, "Session", lambda: session)
+    with pytest.raises(_drilldbapi.TransportError) as caught:
+        _drilldbapi.connect("h", 8047, use_ssl=True, verify_ssl=verify)
+    message = str(caught.value)
+    assert "TLS certificate verification failed" in message and where in message
+    assert "verify_ssl=<path to the CA bundle" in message
+    # The driver never retries without verification.
+    assert session.verify == verify
+
+
+def test_cancel_group_marks_every_statement_and_cancels_only_its_running_ones():
+    session = _RunningSession([])
+    connection, queries = _tagging_connection(session)
+    cursor = connection.cursor()
+    group = "ab" * 16
+    cursor.cancel_group = group
+    cursor.execute("SELECT 1")
+    first = cursor.query_tag
+    cursor.execute("SELECT 2")
+    second = cursor.query_tag
+    assert queries[-2:] == [f"/* sqlalchemy-drill:{first} group:{group} */ SELECT 1",
+                            f"/* sqlalchemy-drill:{second} group:{group} */ SELECT 2"]
+    session.running = [
+        {"queryId": "mine", "query": f"/* sqlalchemy-drill:{second} group:{group} */ SELECT 2"},
+        {"queryId": "other-group", "query": f"/* sqlalchemy-drill:{'1' * 32} group:{'cd' * 16} */ SELECT 2"},
+        {"queryId": "untagged", "query": f"SELECT 'group:{group} */'"},
+    ]
+    session.gets.clear()
+    assert connection.cancel_query_group(group) is True
+    assert [url for url, _ in session.gets if "/cancel/" in url] == [
+        "http://h:8047/profiles/cancel/mine"]
+    # The per-statement cancel still finds a grouped statement by its own tag.
+    session.gets.clear()
+    assert cursor.cancel() is True
+    assert [url for url, _ in session.gets if "/cancel/" in url] == [
+        "http://h:8047/profiles/cancel/mine"]
+
+
+@pytest.mark.parametrize("bad", ["", "x" * 32, "AB" * 16, "ab", "ab" * 16 + " */ DROP"])
+def test_cancel_group_must_be_a_plain_hex_id(bad):
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    session = _RunningSession([])
+    connection, _ = _tagging_connection(session)
+    cursor = connection.cursor()
+    cursor.cancel_group = bad
+    if bad:
+        with pytest.raises(_drilldbapi.ProgrammingError, match="cancel_group"):
+            cursor.execute("SELECT 1")
+    with pytest.raises(_drilldbapi.ProgrammingError, match="cancel_group"):
+        connection.cancel_query_group(bad)
+
+
+def test_cancel_group_with_nothing_running_returns_false(monkeypatch):
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    monkeypatch.setattr(_drilldbapi, "sleep", lambda _s: None)
+    session = _RunningSession([])
+    connection, _ = _tagging_connection(session)
+    assert connection.cancel_query_group("ef" * 16) is False
+    assert not any("/cancel/" in url for url, _ in session.gets)
+
+
+def _rest_connection_returning(columns, metadata, rows):
+    import io
+    import json
+
+    import requests
+
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    class Session(_RecordingSession):
+        def post(self, url, **kwargs):
+            response = requests.Response()
+            response.status_code = 200
+            if "sys.drillbits" in kwargs["data"]:
+                body = {"columns": ["version"], "metadata": ["VARCHAR"],
+                        "rows": [{"version": "1.21.2"}], "queryState": "COMPLETED"}
+            else:
+                body = {"queryId": "q", "columns": columns, "metadata": metadata,
+                        "rows": rows, "queryState": "COMPLETED"}
+            response.raw = io.BytesIO(json.dumps(body).encode())
+            return response
+
+    return _drilldbapi.Connection("h", 8047, "http://", None, Session())
+
+
+def test_rest_float_columns_decode_to_python_floats():
+    # Drill sends DOUBLE/FLOAT values as JSON numbers, and NaN and the
+    # infinities as the strings "NaN", "Infinity" and "-Infinity". The
+    # description says FLOAT, so every value must be a Python float (or None),
+    # never a Decimal or a string.
+    import math
+    import json as _json
+
+    raw = ('{"queryId": "q", "columns": ["a", "b", "c", "d", "e"], '
+           '"metadata": ["FLOAT8", "FLOAT4", "FLOAT8", "FLOAT8", "FLOAT8"], "rows": ['
+           '{"a": 1.25, "b": 1.5, "c": "NaN", "d": "Infinity", "e": "-Infinity"},'
+           '{"a": 0.1, "b": 0, "c": 1.0E300, "d": null, "e": -2}], '
+           '"queryState": "COMPLETED"}')
+    connection = _rest_connection_returning(**{k: v for k, v in _json.loads(raw).items()
+                                                if k in ("columns", "metadata", "rows")})
+    cursor = connection.cursor()
+    cursor.execute("SELECT a, b, c, d, e FROM t")
+    first, second = cursor.fetchall()
+    assert [type(v) for v in first] == [float] * 5
+    assert first[:2] == (1.25, 1.5) and math.isnan(first[2])
+    assert first[3:] == (math.inf, -math.inf)
+    assert second == (0.1, 0.0, 1e300, None, -2.0)
+    assert [type(v) for v in second] == [float, float, float, type(None), float]
+
+
+def test_rest_decimal_description_carries_precision_and_scale():
+    import decimal
+
+    connection = _rest_connection_returning(
+        ["amount", "n", "name"], ["VARDECIMAL(12, 3)", "DECIMAL(38,0)", "VARCHAR(65535)"],
+        [{"amount": 12345.678, "n": 12345678901234567890123456789012345678, "name": "x"}])
+    cursor = connection.cursor()
+    cursor.execute("SELECT amount, n, name FROM t")
+    assert [(d[0], d[4], d[5]) for d in cursor.description] == [
+        ("amount", 12, 3), ("n", 38, 0), ("name", None, None)]
+    assert cursor.fetchall() == [(decimal.Decimal("12345.678"),
+                                  decimal.Decimal("12345678901234567890123456789012345678"), "x")]
+
+
+def test_file_reflection_maps_vardecimal_with_precision_and_scale(streaming_rest_engine):
+    # Drill reports DECIMAL columns of file-backed tables (Parquet, JSON with
+    # decimals enabled) as VARDECIMAL(p, s) in the probe's metadata.
+    from sqlalchemy import types as sa_types
+
+    engine, state = streaming_rest_engine
+    state.probe, state.query_state = "columns", "COMPLETED"
+    state.probe_columns = ["amount", "ratio", "n"]
+    state.probe_metadata = ["VARDECIMAL(12, 3)", "FLOAT8", "BIGINT"]
+    state.rows = [{"amount": 1.5, "ratio": 2.0, "n": 1}]
+    with engine.connect() as connection:
+        columns = inspect(connection).get_columns("t.parquet", "cp.default")
+    amount, ratio, n = (column["type"] for column in columns)
+    assert isinstance(amount, sa_types.DECIMAL)
+    assert (amount.precision, amount.scale) == (12, 3)
+    assert isinstance(ratio, sa_types.FLOAT) and isinstance(n, sa_types.BIGINT)
+
+
+@pytest.mark.parametrize("metadata", ["FLOAT4", "FLOAT8"])
+def test_rest_repeated_float_columns_decode_elements(metadata):
+    import math
+
+    connection = _rest_connection_returning(
+        ["arr"], [metadata],
+        [{"arr": [1.5, 2.5, None, "NaN", "Infinity", "-Infinity"]},
+         {"arr": []}, {"arr": None}, {"arr": [[1.25], [None, -2.5]]}])
+    cursor = connection.cursor()
+    cursor.execute("SELECT arr FROM t")
+    values, empty, null, nested = cursor.fetchall()
+    assert values[0][:3] == [1.5, 2.5, None]
+    assert all(type(value) is float for value in values[0] if value is not None)
+    assert math.isnan(values[0][3])
+    assert values[0][4:] == [math.inf, -math.inf]
+    assert empty == ([],) and null == (None,)
+    assert nested == ([[1.25], [None, -2.5]],)
+    assert type(nested[0][0][0]) is float
+
+
+@pytest.mark.parametrize("metadata", ["FLOAT4", "FLOAT8"])
+def test_rest_float_typecaster_preserves_maps(metadata):
+    from decimal import Decimal
+    from sqlalchemy_drill.drilldbapi._drilldbapi import _float_from_json
+
+    original = {"amount": Decimal("1.25"), "label": "NaN"}
+    assert _float_from_json(original) is original
+    connection = _rest_connection_returning(
+        ["arr"], [metadata], [{"arr": {"amount": 1.25, "label": "NaN"}},
+                            {"arr": [{"amount": 1.25, "label": "NaN"}]}])
+    cursor = connection.cursor()
+    cursor.execute("SELECT arr FROM t")
+    assert cursor.fetchall() == [(original,), ([original],)]
+
+
+def test_rest_trailing_metadata_does_not_claim_float_typecasting(monkeypatch):
+    """Pre-1.19 puts metadata after rows, so the original JSON types remain."""
+    import io
+    import json
+    from decimal import Decimal
+    import requests
+    from sqlalchemy_drill.drilldbapi import _drilldbapi
+
+    connection = _rest_connection_returning([], [], [])
+    response = requests.Response()
+    response.status_code = 200
+    # Dict insertion order is significant: metadata follows the rows.
+    response.raw = io.BytesIO(json.dumps({
+        'columns': ['arr'], 'rows': [{'arr': [1.5, 2.5]}],
+        'metadata': ['FLOAT8'], 'queryState': 'COMPLETED',
+    }).encode())
+    monkeypatch.setattr(connection, 'submit_query', lambda *args, **kwargs: response)
+    cursor = connection.cursor()
+    cursor.execute('SELECT arr FROM t')
+    row = cursor.fetchone()
+    assert row == ([Decimal('1.5'), Decimal('2.5')],)
+    assert all(type(item) is Decimal for item in row[0])

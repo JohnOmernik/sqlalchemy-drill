@@ -1,3 +1,140 @@
+## [1.1.11.7] - unreleased
+
+### Fixed
+
+- REST fetches of repeated FLOAT4/FLOAT8 columns no longer call `float()` on
+  a list. Array elements (including nested arrays) are converted individually;
+  nulls are preserved and maps pass through unchanged. This fixes the
+  array-of-float regression introduced in 1.1.11.6.
+- Clarify that the 1.1.11.6 FLOAT conversion requires Drill 1.19 or later,
+  whose REST metadata precedes the rows.
+
+The existing 1.1.11.6 wheel is immutable and still contains the array defect;
+this fix requires a new release rather than replacement of that artifact.
+
+## [1.1.11.6] - unreleased
+
+### Fixed
+
+- REST results decoded DOUBLE and FLOAT columns as `Decimal`, and NaN,
+  Infinity and -Infinity as the strings `'NaN'`, `'Infinity'` and
+  `'-Infinity'`, although the cursor description reports FLOAT. FLOAT4 and
+  FLOAT8 values are now Python floats (or `None`) on Drill 1.19 and later.
+  On older Drill servers, REST metadata follows the rows and the typecaster
+  cannot run; the original JSON-decoded values are retained.
+- Reflection of DECIMAL columns in file-backed tables (for example Parquet)
+  returned `UserDefinedType`, because Drill reports them as
+  `VARDECIMAL(p, s)`. They now reflect as `DECIMAL(p, s)`, and the REST
+  cursor description carries the precision and scale.
+
+## [1.1.11.5] - unreleased
+
+### Fixed
+
+- Reflection of dynamic-schema plugins such as Kafka returned only the
+  `**` placeholder column that INFORMATION_SCHEMA publishes for them. When
+  that placeholder is the only column, the real columns are now read from a
+  `SELECT * ... LIMIT 1` probe, as for file-backed tables.
+- A missing MongoDB collection raised the probe's `DatabaseError` from
+  `has_table()` and autoload. Absence is now proven, like missing files, by a
+  missing-object diagnostic plus a fresh, complete, unlimited and nonempty
+  `INFORMATION_SCHEMA.TABLES` listing of the database that lacks the name;
+  empty, limited or failed listings still preserve the original error.
+- An HTTPS login whose certificate fails verification now raises
+  `TransportError` explaining that certificates are verified by default since
+  1.1.11.4 and naming the fix (`verify_ssl=<path to the CA bundle>`), instead
+  of a bare SSL error. Verification is never disabled automatically.
+- Query-profile reads for guarded absence used a fixed 30 s timeout per
+  request (up to seven requests plus about 5 s of sleeps). The whole poll now
+  shares one budget: the connection's `request_timeout`, else 30 s.
+- The cancellation tag was per cursor, so `Cursor.cancel()` could reach a
+  different statement from the same cursor. Every `execute()` now uses a
+  fresh tag; `cancel()` only reaches the cursor's latest statement and returns
+  `False` before the first `execute()`.
+- `get_view_definition()` without a schema and without a database in the URL
+  bound `TABLE_SCHEMA = NULL` and never matched. It now searches all schemas
+  and requires a unique match (`InvalidRequestError` if the view name exists
+  in several schemas).
+- When `request_timeout` expires, the driver now cancels the timed-out
+  statement on the server (found by its tag) instead of leaving it running.
+
+### Added
+
+- `Cursor.cancel_group` (optional, 32 lowercase hex characters) marks every
+  statement the cursor runs with a shared ID in addition to its own tag, and
+  `Connection.cancel_query_group(id)` cancels whichever of them is running.
+  This suits callers that must choose a cancel ID before execution starts,
+  such as a SQL editor's "Stop" button, possibly from another connection.
+
+## [1.1.11.4] - unreleased
+
+### Breaking change
+
+- **HTTPS connections now verify the server certificate by default.** With
+  `use_ssl=true` and no `verify_ssl`, 1.1.11.3 and earlier encrypted without
+  checking the certificate; 1.1.11.4 checks it against the system trust store.
+  A server with a self-signed or private-CA certificate that previously
+  connected now fails verification. Migrate by setting
+  `verify_ssl=<path to the CA bundle that signed the server certificate>` in
+  the connection URL (or the `connect()` argument). `verify_ssl=false` restores
+  the old unverified behaviour and is not recommended.
+
+### Fixed
+
+- REST DATE, TIME and TIMESTAMP values equal to zero epoch milliseconds
+  (1970-01-01, midnight, 1970-01-01 00:00:00) were returned as `None`. Only a
+  JSON null now decodes to `None`.
+- REST TIME and TIMESTAMP values keep their millisecond fraction instead of
+  being truncated to whole seconds.
+
+- A `verify_ssl=true` / `verify_ssl=false` URL value was passed to requests as
+  the string, which requests reads as a CA bundle path, so `verify_ssl=true`
+  failed with "Could not find a suitable TLS CA certificate bundle". Boolean
+  spellings now become booleans; any other value is still a CA bundle path.
+  (Correction: an earlier version of this note said the default was
+  unchanged. It is not; see "Breaking change" below.)
+
+- A provably absent file-backed table could surface as the opaque
+  `DatabaseError` instead of `False` / `NoSuchTableError` on a busy server:
+  the failed query's profile was read for only about 0.3 s before its error
+  was published. The profile is now polled with backoff for about 5 s. The
+  opaque REST error text is still never treated as evidence, because
+  permission and other failures produce the same text.
+- `Cursor.get_query_id()` raised `AttributeError`; it now returns the query
+  ID once Drill has sent it, else `None`.
+
+- TLS certificates are now verified by default when `use_ssl` is set
+  (system trust store). `verify_ssl=<CA bundle path>` selects a CA bundle and
+  `verify_ssl=false` explicitly disables verification (logged as a warning).
+  Previously an HTTPS connection without `verify_ssl` accepted any certificate.
+- A streamed query no longer reads its whole response body into memory:
+  a debug log statement evaluated `Response.text` for every query, so
+  `stream_results` had no effect and memory grew with the result size. The
+  body is also parsed in 64 KiB chunks instead of one byte at a time.
+- REST transport failures (connection errors, resets, timeouts, including
+  mid-stream) raise DB-API `TransportError` (an `OperationalError`) instead of
+  raw `requests` exceptions, and the dialect reports them and closed
+  connections as disconnects. `pool_pre_ping` and SQLAlchemy invalidation now
+  replace a pooled connection whose HTTP session failed or was closed, instead
+  of handing it out and failing the first statement.
+- `Cursor.close()` works after its connection was closed or invalidated.
+
+### Added
+
+- Opt-in `request_timeout=<seconds>` connection option (URL query parameter)
+  applied to every REST request; a timeout raises `OperationalError`. Without
+  it nothing changes: there is no client-side limit, as before.
+- `Cursor.cancel()` cancels the statement the cursor is running, including
+  before Drill has sent any result (for example a long aggregation). Every
+  cursor statement carries a leading `/* sqlalchemy-drill:<tag> */` comment
+  with a per-cursor tag (`Cursor.query_tag`); `cancel()` finds that unique tag
+  in Drill's running-query list and calls `/profiles/cancel/{queryId}`.
+  `Connection.cancel_query(query_id)` and `Connection.cancel_tagged_query(tag)`
+  are also available, e.g. to cancel from another connection.
+- `get_view_definition()` returns the stored view SQL from
+  `INFORMATION_SCHEMA.VIEWS` (bound schema and view name) instead of raising
+  `NotImplementedError`; an unknown view raises `NoSuchTableError`.
+
 ## [1.1.11.3] - unreleased
 
 ### Fixed
@@ -89,7 +226,7 @@
   `verify_ssl` defaults to `False`, so `use_ssl=True` alone encrypts without
   authenticating the server. Pass `verify_ssl=True` for a trusted connection.
   This is long-standing behaviour and is unchanged here; changing the default
-  is a separate breaking change.
+  is a separate breaking change. (Superseded: 1.1.11.4 verifies by default.)
 - JDBC and ODBC still inherit `driver == "rest"` from the base dialect. That is
   wrong for both transports, but correcting public dialect metadata is a visible
   API change that deserves its own review rather than riding along with this

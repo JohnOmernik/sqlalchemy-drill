@@ -35,6 +35,9 @@
 //                    is deliberately NOT a stable release.  A PR build can
 //                    never emit the bare stable version; this is asserted
 //                    below rather than left to convention.
+//   * other branches (the branch job that runs next to a PR's pr-head job)
+//                 -> 1.1.11.1+branch.<shortsha>; tests and the wheel build
+//                    run, nothing is published.
 //
 // 1.1.11.1 sorts ABOVE a hypothetical upstream 1.1.11, so it must never be
 // offered to a dependency resolver as a candidate for the plain
@@ -113,8 +116,11 @@ podTemplate(
 
                 if (isPullRequest) {
                     publishVersion = "${baseVersion}+${env.BRANCH_NAME}.${shortGitRev}"
-                } else {
+                } else if (isMaster) {
                     publishVersion = baseVersion
+                } else {
+                    // Plain branch builds verify but never publish.
+                    publishVersion = "${baseVersion}+branch.${shortGitRev}"
                 }
 
                 // A stable release may only come from reviewed, merged history.
@@ -134,8 +140,8 @@ podTemplate(
                         returnStdout: true,
                         label: 'Normalize publish version'
                 ).trim()
-                if (isPullRequest && !publishVersion.contains('+')) {
-                    error("PR build produced a non-local version ${publishVersion}; refusing.")
+                if (!isMaster && !publishVersion.contains('+')) {
+                    error("Non-master build produced a non-local version ${publishVersion}; refusing.")
                 }
 
                 wheelName = "${DIST_NAME}-${publishVersion}-py3-none-any.whl"
@@ -188,7 +194,7 @@ podTemplate(
 
         container('py-ci') {
             stage('Build and verify') {
-                if (isPullRequest) {
+                if (!isMaster) {
                     sh(
                         script: "sed -i \"s/__version__ = '${baseVersion}'/__version__ = '${publishVersion}'/\" sqlalchemy_drill/__init__.py",
                         label: 'Apply pre-release version'
